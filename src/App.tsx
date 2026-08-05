@@ -1645,10 +1645,6 @@ function App() {
                     type="file"
                   />
                 </label>
-                <button disabled={isEditingLocked} type="button">
-                  <Sparkles size={18} aria-hidden="true" />
-                  AIで手順候補
-                </button>
                 <button
                   disabled={!editorClip || isEditingLocked}
                   type="button"
