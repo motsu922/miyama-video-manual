@@ -110,4 +110,3 @@ export type Manual = {
   viewConfirmations?: ViewConfirmation[]
   translations?: Partial<Record<Exclude<ManualLanguage, 'ja'>, ManualTranslation>>
 }
-
