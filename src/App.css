@@ -254,6 +254,71 @@ h2 {
   object-fit: cover;
 }
 
+.video-effect-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #17202f;
+}
+
+.video-effect-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.viewer-video-stage {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+}
+
+.viewer-body .viewer-video-stage video {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+.video-spotlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.video-caption {
+  position: absolute;
+  left: 50%;
+  z-index: 2;
+  max-width: min(78%, 680px);
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.video-caption.top {
+  top: 14px;
+}
+
+.video-caption.center {
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.video-caption.bottom {
+  bottom: 62px;
+}
+
 .play-button {
   position: absolute;
   inset: 0;
@@ -468,6 +533,72 @@ h2 {
 
 .clip-actions button:last-child {
   color: #b91c1c;
+}
+
+.clip-effect-controls {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #cfe0f4;
+  border-radius: 8px;
+  background: #f5f9ff;
+}
+
+.clip-effect-controls > label,
+.focus-picker {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.clip-effect-controls select,
+.clip-effect-controls input:not([type='checkbox']) {
+  min-width: 0;
+  padding: 8px 9px;
+}
+
+.spotlight-toggle {
+  min-height: 38px;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 7px !important;
+}
+
+.spotlight-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.focus-picker > div {
+  width: 76px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.focus-picker button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #93a4b8;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.focus-picker button:hover:not(:disabled),
+.focus-picker button.selected-focus {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.caption-input {
+  grid-column: span 2;
 }
 
 .editor-fieldset {
@@ -1577,6 +1708,10 @@ textarea {
   .clip-list > article {
     grid-template-columns: 1fr;
   }
+
+  .clip-effect-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1652,6 +1787,14 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .clip-effect-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .caption-input {
+    grid-column: auto;
+  }
+
   .locked-note {
     align-items: stretch;
     flex-direction: column;
@@ -1675,3 +1818,4 @@ textarea {
     width: 100%;
   }
 }
+
