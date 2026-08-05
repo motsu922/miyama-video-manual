@@ -861,7 +861,7 @@ textarea {
 
 .step-card {
   display: grid;
-  grid-template-columns: 38px 92px minmax(140px, 0.8fr) minmax(220px, 1.2fr);
+  grid-template-columns: 38px 92px minmax(140px, 0.8fr) minmax(220px, 1.2fr) 36px;
   gap: 10px;
   align-items: start;
   border: 1px solid #e1e8f2;
@@ -885,6 +885,24 @@ textarea {
   border-radius: 7px;
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.step-delete {
+  grid-column: 5;
+  grid-row: 1;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-color: #fecaca;
+  background: #fff;
+  color: #b91c1c;
+}
+
+.step-delete:hover:not(:disabled) {
+  border-color: #ef4444;
+  background: #fef2f2;
 }
 
 .status-panel,

@@ -1103,6 +1103,13 @@ function App() {
     })
   }
 
+  const removeStep = (stepId: number) => {
+    if (isEditingLocked || selectedManual.steps.length <= 1) return
+
+    updateManual({ steps: selectedManual.steps.filter((step) => step.id !== stepId) })
+    setFirebaseMessage('手順を削除しました。Firebaseへ保存すると反映されます。')
+  }
+
   const saveWorkflowManual = async (manual: Manual, message: string) => {
     setManuals((current) => current.map((item) => (item.id === manual.id ? manual : item)))
     try {
@@ -1867,7 +1874,7 @@ function App() {
               </section>
               <div className="section-heading">
                 <h2>チャプター手順</h2>
-                <button type="button" onClick={addStep}>
+                <button disabled={isEditingLocked} type="button" onClick={addStep}>
                   <Plus size={17} aria-hidden="true" />
                   現在位置に手順追加
                 </button>
@@ -1880,6 +1887,19 @@ function App() {
                     onClick={() => seekToStep(step)}
                   >
                     <strong>{String(index + 1).padStart(2, '0')}</strong>
+                    <button
+                      aria-label={`手順 ${index + 1} を削除`}
+                      className="step-delete"
+                      disabled={isEditingLocked || selectedManual.steps.length <= 1}
+                      title="手順を削除"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        removeStep(step.id)
+                      }}
+                    >
+                      <Trash2 size={17} aria-hidden="true" />
+                    </button>
                     <label>
                       時間
                       <input
