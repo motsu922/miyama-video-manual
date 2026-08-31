@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Copy,
-  Clock3,
   Eye,
   FileVideo,
   GitBranch,
@@ -2763,65 +2762,94 @@ function App() {
 
         {view === 'approval' && (
           <div className="approval-grid">
-            <section className="status-panel">
-              <h2>承認ステータス</h2>
-              <div className="status-flow">
-                {statusFlow.map((status) => (
-                  <div
-                    key={status}
-                    className={selectedManual.status === status ? 'current' : ''}
-                  >
-                    {selectedManual.status === status ? (
-                      <CheckCircle2 size={18} aria-hidden="true" />
-                    ) : (
-                      <Clock3 size={18} aria-hidden="true" />
-                    )}
-                    {statusLabels[status]}
-                  </div>
-                ))}
+            <section className="status-panel simple-workflow">
+              <div>
+                <p className="eyebrow">公開ワークフロー</p>
+                <h2>{statusLabels[selectedManual.status]}</h2>
               </div>
-              <div className="approval-actions">
-                <button type="button" onClick={submitForReview}>
-                  <Send size={18} aria-hidden="true" />
-                  承認依頼
-                </button>
-                <button type="button" onClick={approveManual}>
-                  <ShieldCheck size={18} aria-hidden="true" />
-                  承認する
-                </button>
-                <button type="button" onClick={publishManual}>
-                  <Eye size={18} aria-hidden="true" />
-                  公開
-                </button>
-              </div>
-              <label className="review-comment">
-                コメント・差戻し理由
-                <textarea
-                  value={reviewComment}
-                  onChange={(event) => setReviewComment(event.target.value)}
-                  placeholder="承認時の補足、または差戻し理由を入力"
-                />
-              </label>
-              <button className="return-action" type="button" onClick={returnToDraft}>
-                <RotateCcw size={17} aria-hidden="true" />
-                下書きへ差戻し
-              </button>
+              <ol className="workflow-steps">
+                {statusFlow.map((status, index) => {
+                  const currentIndex = statusFlow.indexOf(selectedManual.status)
+                  const isCurrent = selectedManual.status === status
+                  const isDone = index < currentIndex
+                  return (
+                    <li className={`${isCurrent ? 'current' : ''} ${isDone ? 'done' : ''}`} key={status}>
+                      <span>{isDone || isCurrent ? <CheckCircle2 size={17} aria-hidden="true" /> : index + 1}</span>
+                      <strong>{statusLabels[status]}</strong>
+                    </li>
+                  )
+                })}
+              </ol>
+              <section className="workflow-next-action">
+                {selectedManual.status === 'draft' && (
+                  <>
+                    <p>内容を確認して、承認者へ送ります。</p>
+                    <button type="button" onClick={submitForReview}>
+                      <Send size={18} aria-hidden="true" />
+                      承認を依頼する
+                    </button>
+                  </>
+                )}
+                {selectedManual.status === 'review' && (
+                  <>
+                    <p>レビュー条件を確認したら、承認します。</p>
+                    <button type="button" onClick={approveManual}>
+                      <ShieldCheck size={18} aria-hidden="true" />
+                      承認する
+                    </button>
+                    <label className="review-comment">
+                      差戻し理由
+                      <textarea
+                        value={reviewComment}
+                        onChange={(event) => setReviewComment(event.target.value)}
+                        placeholder="修正が必要な内容を入力"
+                      />
+                    </label>
+                    <button className="return-action" type="button" onClick={returnToDraft}>
+                      <RotateCcw size={17} aria-hidden="true" />
+                      差戻す
+                    </button>
+                  </>
+                )}
+                {selectedManual.status === 'approved' && (
+                  <>
+                    <p>承認済みです。現場で閲覧できる状態にします。</p>
+                    <button type="button" onClick={publishManual}>
+                      <Eye size={18} aria-hidden="true" />
+                      現場へ公開する
+                    </button>
+                  </>
+                )}
+                {selectedManual.status === 'published' && (
+                  <>
+                    <p>現場で公開中です。変更が必要なときは改訂版を作成します。</p>
+                    <button type="button" onClick={beginRevision}>
+                      <RotateCcw size={18} aria-hidden="true" />
+                      改訂を開始する
+                    </button>
+                  </>
+                )}
+              </section>
             </section>
 
             <section className="review-panel">
-              <h2>レビュー条件</h2>
-              <div className="check-list">
-                {selectedManual.checks.map((check) => (
-                  <label key={check.id}>
-                    <input
-                      checked={check.checked}
-                      type="checkbox"
-                      onChange={() => toggleReviewCheck(check.id)}
-                    />
-                    {check.label}
-                  </label>
-                ))}
-              </div>
+              {selectedManual.status === 'review' && (
+                <>
+                  <h2>レビュー条件</h2>
+                  <div className="check-list">
+                    {selectedManual.checks.map((check) => (
+                      <label key={check.id}>
+                        <input
+                          checked={check.checked}
+                          type="checkbox"
+                          onChange={() => toggleReviewCheck(check.id)}
+                        />
+                        {check.label}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
               <h2>承認者</h2>
               <div className="reviewers">
                 {selectedManual.reviewers.map((reviewer) => (
