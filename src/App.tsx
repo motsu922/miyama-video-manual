@@ -581,6 +581,7 @@ function App() {
   const [decisionPath, setDecisionPath] = useState<string[]>([])
   const [selectedDecisionNodeId, setSelectedDecisionNodeId] = useState<string | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
+  const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
   const [hasOpenedQrManual, setHasOpenedQrManual] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const viewerVideoRef = useRef<HTMLVideoElement | null>(null)
@@ -622,8 +623,9 @@ function App() {
     url.search = ''
     url.hash = ''
     url.searchParams.set('manual', selectedManual.id)
+    if (isAbnormalManual) url.searchParams.set('view', 'decision')
     return url.toString()
-  }, [selectedManual.id])
+  }, [isAbnormalManual, selectedManual.id])
   const videoClips = useMemo<VideoClip[]>(() => {
     if (selectedManual.videoClips?.length) return selectedManual.videoClips
     if (!selectedManual.videoUrl) return []
@@ -722,11 +724,12 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (hasOpenedQrManual || !qrManualId || !manuals.some((manual) => manual.id === qrManualId)) return
-    setSelectedId(qrManualId)
-    setView('library')
+    const qrManual = manuals.find((manual) => manual.id === qrManualId)
+    if (hasOpenedQrManual || !qrManual) return
+    setSelectedId(qrManual.id)
+    setView(qrView === 'decision' || qrManual.kind === 'abnormal' ? 'decision' : 'library')
     setHasOpenedQrManual(true)
-  }, [hasOpenedQrManual, manuals, qrManualId])
+  }, [hasOpenedQrManual, manuals, qrManualId, qrView])
 
   useEffect(() => {
     setFlashCard(null)
@@ -3193,14 +3196,16 @@ function App() {
               <section className="manual-qr-panel" id="manual-qr-panel">
                 <div className="manual-qr-copy">
                   <p className="eyebrow">現場掲示用</p>
-                  <h2>この作業のQRコード</h2>
+                  <h2>{isAbnormalManual ? '処置フローのQRコード' : 'この作業のQRコード'}</h2>
                   <p>
-                    現場で読み取ると、このマニュアルの閲覧画面を直接開きます。
+                    {isAbnormalManual
+                      ? '現場で読み取ると、スマホでYES／NOの処置フローを直接開けます。'
+                      : '現場で読み取ると、このマニュアルの閲覧画面を直接開きます。'}
                   </p>
                   {!isPublished && <span className="qr-draft-note">公開前のマニュアルです</span>}
                 </div>
                 <QRCodeSVG
-                  aria-label={`${selectedManual.title}を開くQRコード`}
+                  aria-label={`${selectedManual.title}${isAbnormalManual ? 'の処置フロー' : ''}を開くQRコード`}
                   bgColor="#ffffff"
                   className="manual-qr-code"
                   fgColor="#17202f"
