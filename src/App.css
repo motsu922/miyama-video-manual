@@ -1097,13 +1097,24 @@ textarea {
 
 .decision-tree-list li {
   position: relative;
+  border: 1px solid #d6e3f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.decision-tree-list li > button {
+  width: 100%;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 5px 8px;
   padding: 12px 32px 12px 14px;
-  border: 1px solid #d6e3f0;
-  border-radius: 8px;
-  background: #fff;
+  background: transparent;
+  text-align: left;
+}
+
+.decision-tree-list li > button:hover {
+  background: #f0f7ff;
 }
 
 .decision-tree-list li:not(:last-child)::after {
@@ -1121,6 +1132,15 @@ textarea {
   box-shadow: inset 3px 0 0 #2563eb;
 }
 
+.decision-tree-list li.selected-node {
+  border-color: #0f766e;
+  box-shadow: inset 4px 0 0 #0f766e;
+}
+
+.decision-tree-list li.selected-node > button {
+  background: #ecfdf5;
+}
+
 .decision-tree-list strong {
   min-width: 0;
   color: #17202f;
@@ -1132,6 +1152,36 @@ textarea {
   color: #64748b;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.decision-quick-adds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-quick-adds.single-action {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.decision-quick-adds button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px dashed #93c5fd;
+  border-radius: 7px;
+  background: #f8fbff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.decision-quick-adds button:hover:not(:disabled) {
+  border-style: solid;
+  background: #eff6ff;
 }
 
 .decision-order {
@@ -2236,7 +2286,8 @@ textarea {
   .metric-grid,
   .decision-link-fields,
   .decision-answer-actions,
-  .manual-qr-actions {
+  .manual-qr-actions,
+  .decision-quick-adds {
     grid-template-columns: 1fr;
   }
 
