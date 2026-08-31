@@ -8,6 +8,7 @@ import {
   Clock3,
   Eye,
   FileVideo,
+  GitBranch,
   Library,
   Languages,
   ListChecks,
@@ -49,7 +50,7 @@ import {
   uploadManualVideo,
 } from './manualRepository'
 import { translateManualContent } from './translationRepository'
-import type { ApprovalEvent, ApprovalStatus, FlashTestResult, InspectionImage, InspectionImageKind, Manual, ManualLanguage, ReviewCheck, Step, VideoClip } from './types'
+import type { ApprovalEvent, ApprovalStatus, DecisionNode, DecisionNodeType, FlashTestResult, InspectionImage, InspectionImageKind, Manual, ManualLanguage, ReviewCheck, Step, VideoClip } from './types'
 
 const initialManuals: Manual[] = [
   {
@@ -154,6 +155,53 @@ const statusLabels: Record<ApprovalStatus, string> = {
 
 const statusFlow: ApprovalStatus[] = ['draft', 'review', 'approved', 'published']
 
+const decisionNodeTypeLabels: Record<DecisionNodeType, string> = {
+  question: '判断',
+  action: '処置',
+  end: '完了',
+}
+
+function createDefaultDecisionNodes(): DecisionNode[] {
+  return [
+    {
+      id: 'safety-check',
+      type: 'question',
+      title: '安全に作業を継続できる状態ですか？',
+      detail: 'けが、設備破損、火災・漏電など、直ちに危険につながる要因を確認します。',
+      yesNodeId: 'quality-check',
+      noNodeId: 'stop-and-report',
+    },
+    {
+      id: 'quality-check',
+      type: 'question',
+      title: '品質・設備条件に異常がありますか？',
+      detail: '検査値、外観、設備表示、異音などを基準書と照合します。',
+      yesNodeId: 'isolate-and-record',
+      noNodeId: 'complete',
+    },
+    {
+      id: 'stop-and-report',
+      type: 'action',
+      title: '設備を停止して上長へ連絡',
+      detail: '非常停止または通常停止を行い、対象品と周辺在庫を隔離して班長へ連絡します。',
+      nextNodeId: 'complete',
+    },
+    {
+      id: 'isolate-and-record',
+      type: 'action',
+      title: '対象品を隔離し、異常履歴を登録',
+      detail: '発見時刻、現象、ロット、数量を記録し、品質保証へエスカレーションします。',
+      nextNodeId: 'complete',
+    },
+    {
+      id: 'complete',
+      type: 'end',
+      title: '処置を完了',
+      detail: '処置内容と連絡先を確認し、必要な場合は復旧許可を受けてください。',
+    },
+  ]
+}
+
 const imageKindLabels: Record<InspectionImageKind, string> = {
   ok: 'OK写真',
   ng: 'NG例写真',
@@ -210,7 +258,13 @@ function normalizeManual(manual: Manual): Manual {
       : check,
   ) as ReviewCheck[]
 
-  return { ...manual, checks, approvalHistory: manual.approvalHistory ?? [] }
+  return {
+    ...manual,
+    kind: manual.kind ?? 'standard',
+    decisionNodes: manual.decisionNodes ?? [],
+    checks,
+    approvalHistory: manual.approvalHistory ?? [],
+  }
 }
 
 function nextMinorVersion(version: string) {
@@ -398,7 +452,7 @@ async function composeAnnotatedImage(pending: PendingInspectionImage) {
 function App() {
   const [manuals, setManuals] = useState(initialManuals)
   const [selectedId, setSelectedId] = useState(initialManuals[0].id)
-  const [view, setView] = useState<'edit' | 'approval' | 'library' | 'flash'>('edit')
+  const [view, setView] = useState<'edit' | 'approval' | 'library' | 'flash' | 'decision'>('edit')
   const [query, setQuery] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [pendingInspectionImage, setPendingInspectionImage] = useState<PendingInspectionImage | null>(null)
@@ -418,6 +472,8 @@ function App() {
   const [flashTotal, setFlashTotal] = useState(0)
   const [editorClipIndex, setEditorClipIndex] = useState(0)
   const [viewerClipIndex, setViewerClipIndex] = useState(0)
+  const [decisionNodeId, setDecisionNodeId] = useState<string | null>(null)
+  const [decisionPath, setDecisionPath] = useState<string[]>([])
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const viewerVideoRef = useRef<HTMLVideoElement | null>(null)
   const resumeEditorClipRef = useRef(false)
@@ -432,8 +488,21 @@ function App() {
   )
 
   const selectedManual = manuals.find((manual) => manual.id === selectedId) ?? manuals[0] ?? initialManuals[0]
+  const selectedManualRef = useRef(selectedManual)
+  selectedManualRef.current = selectedManual
   const isPublished = selectedManual.status === 'published'
   const isEditingLocked = selectedManual.status !== 'draft'
+  const isAbnormalManual = selectedManual.kind === 'abnormal'
+  const decisionNodes = useMemo<DecisionNode[]>(
+    () => selectedManual.decisionNodes ?? [],
+    [selectedManual.decisionNodes],
+  )
+  const decisionNodeMap = useMemo(
+    () => new Map(decisionNodes.map((node) => [node.id, node])),
+    [decisionNodes],
+  )
+  const decisionStartNodeId = selectedManual.decisionStartNodeId ?? decisionNodes[0]?.id ?? null
+  const activeDecisionNode = decisionNodeMap.get(decisionNodeId ?? decisionStartNodeId ?? '')
   const videoClips = useMemo<VideoClip[]>(() => {
     if (selectedManual.videoClips?.length) return selectedManual.videoClips
     if (!selectedManual.videoUrl) return []
@@ -539,6 +608,10 @@ function App() {
     setEditorClipIndex(0)
     setViewerClipIndex(0)
     setViewerLanguage('ja')
+    const manual = selectedManualRef.current
+    const startNodeId = manual.decisionStartNodeId ?? manual.decisionNodes?.[0]?.id ?? null
+    setDecisionNodeId(startNodeId)
+    setDecisionPath(startNodeId ? [startNodeId] : [])
   }, [selectedManual.id])
 
   useEffect(() => {
@@ -681,6 +754,61 @@ function App() {
           : manual,
       ),
     )
+  }
+
+  const updateDecisionNode = (nodeId: string, patch: Partial<DecisionNode>) => {
+    updateManual({
+      decisionNodes: decisionNodes.map((node) => (node.id === nodeId ? { ...node, ...patch } : node)),
+    })
+  }
+
+  const addDecisionNode = (type: DecisionNodeType) => {
+    const id = `decision-${Date.now()}`
+    const nextNode: DecisionNode = {
+      id,
+      type,
+      title: type === 'question' ? '確認する項目' : type === 'action' ? '実施する処置' : '処置を完了',
+      detail: type === 'question' ? '現場で判断する条件を入力します。' : '現場で実施する内容を入力します。',
+    }
+    updateManual({ decisionNodes: [...decisionNodes, nextNode] })
+  }
+
+  const removeDecisionNode = (nodeId: string) => {
+    if (decisionNodes.length <= 1) {
+      setFirebaseMessage('処置フローには少なくとも1つのノードが必要です')
+      return
+    }
+    const remainingNodes = decisionNodes
+      .filter((node) => node.id !== nodeId)
+      .map((node) => ({
+        ...node,
+        yesNodeId: node.yesNodeId === nodeId ? undefined : node.yesNodeId,
+        noNodeId: node.noNodeId === nodeId ? undefined : node.noNodeId,
+        nextNodeId: node.nextNodeId === nodeId ? undefined : node.nextNodeId,
+      }))
+    updateManual({
+      decisionNodes: remainingNodes,
+      decisionStartNodeId:
+        selectedManual.decisionStartNodeId === nodeId ? remainingNodes[0]?.id : selectedManual.decisionStartNodeId,
+    })
+    if (decisionNodeId === nodeId) {
+      setDecisionNodeId(remainingNodes[0]?.id ?? null)
+      setDecisionPath(remainingNodes[0] ? [remainingNodes[0].id] : [])
+    }
+  }
+
+  const resetDecisionReview = () => {
+    setDecisionNodeId(decisionStartNodeId)
+    setDecisionPath(decisionStartNodeId ? [decisionStartNodeId] : [])
+  }
+
+  const advanceDecision = (nextNodeId?: string) => {
+    if (!nextNodeId || !decisionNodeMap.has(nextNodeId)) {
+      setFirebaseMessage('次に進む分岐先を設定してください')
+      return
+    }
+    setDecisionNodeId(nextNodeId)
+    setDecisionPath((current) => [...current, nextNodeId])
   }
 
   const persistSelectedManual = async () => {
@@ -1208,8 +1336,8 @@ function App() {
       !selectedManual.controlNo && '整理No',
       !selectedManual.productName && '品名',
       !selectedManual.owner && '作成者',
-      !selectedManual.videoUrl && '動画',
-      selectedManual.steps.length === 0 && '手順',
+      !isAbnormalManual && !selectedManual.videoUrl && '動画',
+      isAbnormalManual ? decisionNodes.length === 0 && '処置フロー' : selectedManual.steps.length === 0 && '手順',
     ].filter(Boolean)
 
     if (missingFields.length > 0) {
@@ -1473,6 +1601,7 @@ function App() {
       thumbnail:
         'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
       tags: ['未分類'],
+      kind: 'standard',
       reviewers: ['承認者を追加'],
       checks: [{ id: 'content', label: '動画と手順の整合性を確認', checked: false }],
       approvalHistory: [
@@ -1493,6 +1622,41 @@ function App() {
     setView('edit')
   }
 
+  const createAbnormalManual = () => {
+    const id = `A-${Math.floor(1000 + Math.random() * 8999)}`
+    const decisionNodes = createDefaultDecisionNodes()
+    const manual: Manual = {
+      id,
+      title: '新規異常処置マニュアル',
+      workName: '異常処置',
+      controlNo: `ABN-${new Date().getFullYear()}-${id.replace('A-', '')}`,
+      productName: '対象品を入力',
+      department: '未設定',
+      owner: '作成者',
+      status: 'draft',
+      version: 'v0.1',
+      duration: '分岐型',
+      updatedAt: new Date().toISOString().slice(0, 10),
+      videoUrl: '',
+      thumbnail:
+        'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1200&q=80',
+      tags: ['異常対応', '処置フロー'],
+      kind: 'abnormal',
+      decisionNodes,
+      decisionStartNodeId: decisionNodes[0].id,
+      reviewers: ['承認者を追加'],
+      checks: [{ id: 'flow', label: 'YES／NOの分岐と処置内容を確認', checked: false }],
+      approvalHistory: [
+        { id: `created-${id}`, action: 'created', actor: '作成者', createdAt: new Date().toISOString() },
+      ],
+      inspectionImages: [],
+      steps: [],
+    }
+    void saveWorkflowManual(manual, '異常処置マニュアルをFirebaseへ保存しました')
+    setSelectedId(id)
+    setView('edit')
+  }
+
   const duplicateManual = async () => {
     const id = `M-${Math.floor(1000 + Math.random() * 8999)}`
     const copiedManual: Manual = {
@@ -1508,6 +1672,7 @@ function App() {
         inspectionImages: step.inspectionImages?.map((image) => ({ ...image })),
       })),
       videoClips: selectedManual.videoClips?.map((clip) => ({ ...clip })),
+      decisionNodes: selectedManual.decisionNodes?.map((node) => ({ ...node })),
       approvalHistory: [
         {
           id: `created-${id}`,
@@ -1559,6 +1724,10 @@ function App() {
           <Plus size={18} aria-hidden="true" />
           新規マニュアル
         </button>
+        <button className="abnormal-create-action" type="button" onClick={createAbnormalManual}>
+          <GitBranch size={18} aria-hidden="true" />
+          異常処置を作成
+        </button>
 
         <label className="search-box">
           <Search size={17} aria-hidden="true" />
@@ -1593,7 +1762,10 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Firebase project: miyamaunitec-fb87a</p>
-            <h1>{selectedManual.title}</h1>
+            <div className="manual-title-row">
+              <h1>{selectedManual.title}</h1>
+              {isAbnormalManual && <span className="abnormal-badge">異常処置・分岐型</span>}
+            </div>
           </div>
           <div className="manual-actions">
             {isPublished && (
@@ -1637,6 +1809,15 @@ function App() {
               <Sparkles size={17} aria-hidden="true" />
               フラッシュテスト
             </button>
+            {isAbnormalManual && (
+              <button
+                className={view === 'decision' ? 'selected' : ''}
+                onClick={() => setView('decision')}
+              >
+                <GitBranch size={17} aria-hidden="true" />
+                処置フロー
+              </button>
+            )}
           </nav>
         </header>
 
@@ -2112,6 +2293,152 @@ function App() {
               </div>
               </fieldset>
             </section>
+            {isAbnormalManual && (
+              <section className={`decision-authoring ${isEditingLocked ? 'locked-panel' : ''}`}>
+                <header className="decision-section-header">
+                  <div>
+                    <p className="eyebrow">異常処置フロー</p>
+                    <h2>判断ツリーを作成</h2>
+                  </div>
+                  <div className="decision-add-actions">
+                    <button disabled={isEditingLocked} type="button" onClick={() => addDecisionNode('question')}>
+                      <Plus size={16} aria-hidden="true" />
+                      判断を追加
+                    </button>
+                    <button disabled={isEditingLocked} type="button" onClick={() => addDecisionNode('action')}>
+                      <Plus size={16} aria-hidden="true" />
+                      処置を追加
+                    </button>
+                    <button disabled={isEditingLocked} type="button" onClick={() => addDecisionNode('end')}>
+                      <Plus size={16} aria-hidden="true" />
+                      完了を追加
+                    </button>
+                  </div>
+                </header>
+                <div className="decision-authoring-layout">
+                  <ol className="decision-tree-list" aria-label="処置フローのツリー">
+                    {decisionNodes.map((node, index) => (
+                      <li className={node.id === decisionStartNodeId ? 'start-node' : ''} key={node.id}>
+                        <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
+                        <strong>{node.title || '名称未設定'}</strong>
+                        <small>
+                          {node.type === 'question'
+                            ? `YES: ${decisionNodeMap.get(node.yesNodeId ?? '')?.title ?? '未設定'} / NO: ${decisionNodeMap.get(node.noNodeId ?? '')?.title ?? '未設定'}`
+                            : node.type === 'action'
+                              ? `次へ: ${decisionNodeMap.get(node.nextNodeId ?? '')?.title ?? '未設定'}`
+                              : '処置フロー終了'}
+                        </small>
+                        <span className="decision-order">{index + 1}</span>
+                      </li>
+                    ))}
+                  </ol>
+
+                  <div className="decision-node-list">
+                    {decisionNodes.map((node) => (
+                      <article className="decision-node-editor" key={node.id}>
+                        <div className="decision-node-editor-header">
+                          <label className="node-type-select">
+                            種別
+                            <select
+                              disabled={isEditingLocked}
+                              value={node.type}
+                              onChange={(event) =>
+                                updateDecisionNode(node.id, { type: event.target.value as DecisionNodeType })
+                              }
+                            >
+                              <option value="question">YES／NO判断</option>
+                              <option value="action">処置</option>
+                              <option value="end">完了</option>
+                            </select>
+                          </label>
+                          <label className="start-node-toggle">
+                            <input
+                              checked={node.id === decisionStartNodeId}
+                              disabled={isEditingLocked}
+                              name="decision-start"
+                              type="radio"
+                              onChange={() => updateManual({ decisionStartNodeId: node.id })}
+                            />
+                            開始地点
+                          </label>
+                          <button
+                            aria-label={`${node.title || 'このノード'}を削除`}
+                            className="decision-delete"
+                            disabled={isEditingLocked}
+                            title="ノードを削除"
+                            type="button"
+                            onClick={() => removeDecisionNode(node.id)}
+                          >
+                            <Trash2 size={16} aria-hidden="true" />
+                          </button>
+                        </div>
+                        <label>
+                          表示する判断・処置
+                          <input
+                            disabled={isEditingLocked}
+                            value={node.title}
+                            onChange={(event) => updateDecisionNode(node.id, { title: event.target.value })}
+                          />
+                        </label>
+                        <label>
+                          詳細・現場への指示
+                          <textarea
+                            disabled={isEditingLocked}
+                            value={node.detail}
+                            onChange={(event) => updateDecisionNode(node.id, { detail: event.target.value })}
+                          />
+                        </label>
+                        {node.type === 'question' && (
+                          <div className="decision-link-fields">
+                            <label>
+                              YESの分岐先
+                              <select
+                                disabled={isEditingLocked}
+                                value={node.yesNodeId ?? ''}
+                                onChange={(event) => updateDecisionNode(node.id, { yesNodeId: event.target.value || undefined })}
+                              >
+                                <option value="">選択してください</option>
+                                {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
+                                  <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              NOの分岐先
+                              <select
+                                disabled={isEditingLocked}
+                                value={node.noNodeId ?? ''}
+                                onChange={(event) => updateDecisionNode(node.id, { noNodeId: event.target.value || undefined })}
+                              >
+                                <option value="">選択してください</option>
+                                {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
+                                  <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        )}
+                        {node.type === 'action' && (
+                          <label>
+                            次の処置
+                            <select
+                              disabled={isEditingLocked}
+                              value={node.nextNodeId ?? ''}
+                              onChange={(event) => updateDecisionNode(node.id, { nextNodeId: event.target.value || undefined })}
+                            >
+                              <option value="">選択してください</option>
+                              {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
+                                <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            )}
           </div>
         )}
 
@@ -2359,6 +2686,84 @@ function App() {
                 </div>
               </section>
             </aside>
+          </div>
+        )}
+
+        {view === 'decision' && isAbnormalManual && (
+          <div className="decision-review-view">
+            <aside className="decision-review-tree">
+              <header className="decision-section-header">
+                <div>
+                  <p className="eyebrow">レビュー用ツリー</p>
+                  <h2>異常処置の全体像</h2>
+                </div>
+                <button type="button" onClick={resetDecisionReview}>
+                  <RotateCcw size={16} aria-hidden="true" />
+                  最初から
+                </button>
+              </header>
+              <ol className="decision-review-list">
+                {decisionNodes.map((node) => (
+                  <li
+                    className={`${decisionPath.includes(node.id) ? 'visited' : ''} ${activeDecisionNode?.id === node.id ? 'current' : ''}`}
+                    key={node.id}
+                  >
+                    <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
+                    <div>
+                      <strong>{node.title || '名称未設定'}</strong>
+                      <small>{node.detail || '説明を入力してください'}</small>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </aside>
+
+            <section className="decision-runner" aria-live="polite">
+              {activeDecisionNode ? (
+                <>
+                  <div className="decision-runner-progress">
+                    <span>処置確認</span>
+                    <span>{decisionPath.length} / {decisionNodes.length}</span>
+                  </div>
+                  <span className={`decision-type large ${activeDecisionNode.type}`}>
+                    {decisionNodeTypeLabels[activeDecisionNode.type]}
+                  </span>
+                  <h2>{activeDecisionNode.title || '名称未設定'}</h2>
+                  <p>{activeDecisionNode.detail || '現場への指示を入力してください。'}</p>
+                  {activeDecisionNode.type === 'question' && (
+                    <div className="decision-answer-actions">
+                      <button className="decision-answer yes" type="button" onClick={() => advanceDecision(activeDecisionNode.yesNodeId)}>
+                        YES
+                      </button>
+                      <button className="decision-answer no" type="button" onClick={() => advanceDecision(activeDecisionNode.noNodeId)}>
+                        NO
+                      </button>
+                    </div>
+                  )}
+                  {activeDecisionNode.type === 'action' && (
+                    <button className="decision-next-action" type="button" onClick={() => advanceDecision(activeDecisionNode.nextNodeId)}>
+                      処置を実施した。次へ進む
+                    </button>
+                  )}
+                  {activeDecisionNode.type === 'end' && (
+                    <div className="decision-complete-state">
+                      <CheckCircle2 size={30} aria-hidden="true" />
+                      <strong>処置フローを完了しました</strong>
+                      <button type="button" onClick={resetDecisionReview}>
+                        最初から確認する
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="decision-empty-state">
+                  <GitBranch size={34} aria-hidden="true" />
+                  <h2>処置フローがありません</h2>
+                  <p>作成画面で判断または処置を追加してください。</p>
+                  <button type="button" onClick={() => setView('edit')}>作成画面へ</button>
+                </div>
+              )}
+            </section>
           </div>
         )}
 
