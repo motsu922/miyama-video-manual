@@ -363,6 +363,23 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
     })
   }
 
+  // Keep every forward connection in a later column, even when multiple routes join.
+  for (let pass = 0; pass < nodes.length; pass += 1) {
+    let changed = false
+    nodes.forEach((node) => {
+      const sourceDepth = depthById.get(node.id)
+      if (sourceDepth === undefined) return
+      getDecisionTargets(node).forEach((target) => {
+        if (!target.id || target.id === firstNodeId || !nodeById.has(target.id)) return
+        const targetDepth = sourceDepth + 1
+        if ((depthById.get(target.id) ?? -1) >= targetDepth) return
+        depthById.set(target.id, targetDepth)
+        changed = true
+      })
+    })
+    if (!changed) break
+  }
+
   let fallbackDepth = Math.max(0, ...depthById.values()) + 1
   nodes.forEach((node) => {
     if (depthById.has(node.id)) return
@@ -375,10 +392,10 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
     const depth = depthById.get(node.id) ?? 0
     layers.set(depth, [...(layers.get(depth) ?? []), node])
   })
-  const nodeWidth = 196
-  const nodeHeight = 80
-  const columnGap = 96
-  const rowGap = 36
+  const nodeWidth = 210
+  const nodeHeight = 94
+  const columnGap = 92
+  const rowGap = 42
   const maxDepth = Math.max(0, ...layers.keys())
   const maxLayerSize = Math.max(1, ...[...layers.values()].map((layer) => layer.length))
   const width = Math.max(720, 80 + (maxDepth + 1) * (nodeWidth + columnGap))
@@ -408,7 +425,9 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
 
 function splitDecisionFlowLabel(title: string) {
   const label = title.trim() || '名称未設定'
-  return label.length > 18 ? [label.slice(0, 18), `${label.slice(18, 34)}...`] : [label]
+  const maxLineLength = 12
+  if (label.length <= maxLineLength) return [label]
+  return [label.slice(0, maxLineLength), `${label.slice(maxLineLength, maxLineLength * 2 - 1)}...`]
 }
 
 function getVideoDuration(file: File) {
@@ -2548,17 +2567,29 @@ function App() {
                         <marker id="decision-flow-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
                           <path d="M 0 0 L 8 4 L 0 8 z" />
                         </marker>
+                        <marker id="decision-flow-arrow-yes" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+                          <path d="M 0 0 L 8 4 L 0 8 z" fill="#15803d" />
+                        </marker>
+                        <marker id="decision-flow-arrow-no" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+                          <path d="M 0 0 L 8 4 L 0 8 z" fill="#b91c1c" />
+                        </marker>
                       </defs>
                       {decisionFlowChart.edges.map((edge) => {
                         const startX = edge.from.x + decisionFlowChart.nodeWidth
                         const startY = edge.from.y + decisionFlowChart.nodeHeight / 2
                         const endX = edge.to.x
                         const endY = edge.to.y + decisionFlowChart.nodeHeight / 2
-                        const bend = Math.max(34, Math.abs(endX - startX) * 0.48)
+                        const goesForward = endX > startX
+                        const turnX = goesForward ? Math.round((startX + endX) / 2) : Math.max(startX, endX) + 44
+                        const markerId = edge.label === 'YES'
+                          ? 'decision-flow-arrow-yes'
+                          : edge.label === 'NO'
+                            ? 'decision-flow-arrow-no'
+                            : 'decision-flow-arrow'
                         return (
                           <g className={`decision-flow-edge ${edge.label.toLowerCase()}`} key={`${edge.from.node.id}-${edge.label}-${edge.to.node.id}`}>
-                            <path d={`M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`} markerEnd="url(#decision-flow-arrow)" />
-                            <text x={(startX + endX) / 2} y={(startY + endY) / 2 - 7}>{edge.label}</text>
+                            <path d={`M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`} markerEnd={`url(#${markerId})`} />
+                            <text x={turnX} y={startY === endY ? startY - 8 : (startY + endY) / 2 - 8}>{edge.label}</text>
                           </g>
                         )
                       })}
@@ -2586,7 +2617,7 @@ function App() {
                               {decisionNodeTypeLabels[layoutNode.node.type]}
                             </text>
                             {lines.map((line, index) => (
-                              <text className="decision-flow-title" key={line} x={layoutNode.x + 13} y={layoutNode.y + 46 + index * 18}>
+                              <text className="decision-flow-title" key={`${line}-${index}`} x={layoutNode.x + 13} y={layoutNode.y + 48 + index * 17}>
                                 {line}
                               </text>
                             ))}
