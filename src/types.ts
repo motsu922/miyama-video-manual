@@ -71,6 +71,20 @@ export type VideoClip = {
 
 export type ManualLanguage = 'ja' | 'th' | 'pt'
 
+export type ManualKind = 'standard' | 'abnormal'
+
+export type DecisionNodeType = 'question' | 'action' | 'end'
+
+export type DecisionNode = {
+  id: string
+  type: DecisionNodeType
+  title: string
+  detail: string
+  yesNodeId?: string
+  noNodeId?: string
+  nextNodeId?: string
+}
+
 export type ManualTranslation = {
   language: Exclude<ManualLanguage, 'ja'>
   title: string
@@ -109,4 +123,7 @@ export type Manual = {
   approvalHistory?: ApprovalEvent[]
   viewConfirmations?: ViewConfirmation[]
   translations?: Partial<Record<Exclude<ManualLanguage, 'ja'>, ManualTranslation>>
+  kind?: ManualKind
+  decisionNodes?: DecisionNode[]
+  decisionStartNodeId?: string
 }
