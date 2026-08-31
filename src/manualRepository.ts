@@ -153,6 +153,19 @@ export async function uploadManualVideo(manualId: string, file: File) {
   return getDownloadURL(videoRef)
 }
 
+export async function uploadManualImage(manualId: string, file: File) {
+  if (!isFirebaseConfigured || !storage) {
+    throw new Error('Firebase Storage 設定が未投入です')
+  }
+
+  await ensureSignedIn()
+
+  const safeName = file.name.replace(/[^\w.-]/g, '_')
+  const imageRef = ref(storage, `manualImages/${manualId}/materials/${Date.now()}-${safeName}`)
+  await uploadBytes(imageRef, file, { contentType: file.type || 'image/jpeg' })
+  return getDownloadURL(imageRef)
+}
+
 export async function uploadInspectionImage(
   manualId: string,
   stepId: number,
