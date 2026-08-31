@@ -476,6 +476,7 @@ function App() {
   const [viewerClipIndex, setViewerClipIndex] = useState(0)
   const [decisionNodeId, setDecisionNodeId] = useState<string | null>(null)
   const [decisionPath, setDecisionPath] = useState<string[]>([])
+  const [selectedDecisionNodeId, setSelectedDecisionNodeId] = useState<string | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [hasOpenedQrManual, setHasOpenedQrManual] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -508,6 +509,7 @@ function App() {
   )
   const decisionStartNodeId = selectedManual.decisionStartNodeId ?? decisionNodes[0]?.id ?? null
   const activeDecisionNode = decisionNodeMap.get(decisionNodeId ?? decisionStartNodeId ?? '')
+  const editingDecisionNode = decisionNodeMap.get(selectedDecisionNodeId ?? decisionStartNodeId ?? '')
   const manualQrUrl = useMemo(() => {
     const url = new URL(window.location.href)
     url.search = ''
@@ -569,357 +571,7 @@ function App() {
             card,
             total: responses.length,
             correct,
-            accuracy: responses.length === 0 ? null : Math.round((correct / responses.length) * 100),
-          }
-        })
-        .sort((left, right) => (left.accuracy ?? -1) - (right.accuracy ?? -1)),
-    [flashCards, flashResults],
-  )
-  const flashWorkerAnalysis = useMemo(() => {
-    const workers = new Map<string, { total: number; correct: number; latest: string }>()
-    flashResults.forEach((result) => {
-      const current = workers.get(result.worker) ?? { total: 0, correct: 0, latest: result.answeredAt }
-      current.total += 1
-      current.correct += Number(result.correct)
-      if (result.answeredAt > current.latest) current.latest = result.answeredAt
-      workers.set(result.worker, current)
-    })
-    return [...workers.entries()]
-      .map(([worker, result]) => ({
-        worker,
-        ...result,
-        accuracy: Math.round((result.correct / result.total) * 100),
-      }))
-      .sort((left, right) => right.latest.localeCompare(left.latest))
-  }, [flashResults])
-
-  useEffect(() => {
-    const unsubscribe = subscribeManuals(
-      (cloudManuals) => {
-        if (cloudManuals.length > 0) {
-          setManuals(cloudManuals.map(normalizeManual))
-          setSelectedId((current) =>
-            cloudManuals.some((manual) => manual.id === current) ? current : cloudManuals[0].id,
-          )
-          setFirebaseMessage('Firebase接続中: videoManuals を参照しています')
-          return
-        }
-        setFirebaseMessage('Firebase接続中: videoManuals は空のためサンプルを表示しています')
-      },
-      (message) => setFirebaseMessage(message),
-    )
-
-    return unsubscribe
-  }, [])
-
-  useEffect(() => {
-    if (hasOpenedQrManual || !qrManualId || !manuals.some((manual) => manual.id === qrManualId)) return
-    setSelectedId(qrManualId)
-    setView('library')
-    setHasOpenedQrManual(true)
-  }, [hasOpenedQrManual, manuals, qrManualId])
-
-  useEffect(() => {
-    setFlashCard(null)
-    setFlashQueue([])
-    setFlashScore(0)
-    setFlashTotal(0)
-    setEditorClipIndex(0)
-    setViewerClipIndex(0)
-    setViewerLanguage('ja')
-    const manual = selectedManualRef.current
-    const startNodeId = manual.decisionStartNodeId ?? manual.decisionNodes?.[0]?.id ?? null
-    setDecisionNodeId(startNodeId)
-    setDecisionPath(startNodeId ? [startNodeId] : [])
-  }, [selectedManual.id])
-
-  useEffect(() => {
-    let active = true
-    let unsubscribe: () => void = () => {}
-    setFlashResults([])
-
-    void ensureSignedIn()
-      .then(() => {
-        if (!active) return
-        unsubscribe = subscribeFlashTestResults(
-          selectedManual.id,
-          (results) =>
-            active &&
-            setFlashResults([...results].sort((left, right) => right.answeredAt.localeCompare(left.answeredAt))),
-          (message) => active && setFirebaseMessage(message),
-        )
-      })
-      .catch(() => active && setFlashResults([]))
-
-    return () => {
-      active = false
-      unsubscribe()
-    }
-  }, [selectedManual.id])
-
-  const filteredManuals = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    if (!keyword) return manuals
-    return manuals.filter((manual) =>
-      [
-        manual.title,
-        manual.workName ?? '',
-        manual.controlNo ?? '',
-        manual.productName ?? '',
-        manual.department,
-        manual.owner,
-        ...manual.tags,
-      ].some((value) =>
-        value.toLowerCase().includes(keyword),
-      ),
-    )
-  }, [manuals, query])
-
-  const activeStep = useMemo(() => {
-    return selectedManual.steps.reduce((active, step) => {
-      return parseStepTime(step.time) <= currentVideoTime ? step : active
-    }, selectedManual.steps[0])
-  }, [currentVideoTime, selectedManual.steps])
-
-  const getComposedPosition = (seconds: number) => {
-    let elapsed = 0
-    for (const [index, clip] of videoClips.entries()) {
-      const clipEnd = clip.trimEnd > clip.trimStart ? clip.trimEnd : clip.duration
-      const playableDuration = Math.max(0, clipEnd - clip.trimStart)
-      const isLastClip = index === videoClips.length - 1
-      if (playableDuration === 0 && isLastClip) {
-        return { index, time: clip.trimStart + Math.max(0, seconds - elapsed) }
-      }
-      if (seconds <= elapsed + playableDuration || isLastClip) {
-        return { index, time: Math.min(clipEnd, clip.trimStart + Math.max(0, seconds - elapsed)) }
-      }
-      elapsed += playableDuration
-    }
-    return { index: 0, time: 0 }
-  }
-
-  const seekToStep = (step: Step) => {
-    const seconds = parseStepTime(step.time)
-    setCurrentVideoTime(seconds)
-    const position = getComposedPosition(seconds)
-    if (position.index !== editorClipIndex) {
-      pendingEditorSeekRef.current = position.time
-      setEditorClipIndex(position.index)
-      return
-    }
-    if (videoRef.current) {
-      videoRef.current.currentTime = position.time
-      void videoRef.current.play()
-    }
-  }
-
-  const handleEditorClipLoaded = (event: SyntheticEvent<HTMLVideoElement>) => {
-    if (!editorClip) return
-    event.currentTarget.playbackRate = getClipPlaybackRate(editorClip)
-    event.currentTarget.currentTime = pendingEditorSeekRef.current ?? editorClip.trimStart
-    pendingEditorSeekRef.current = null
-    if (resumeEditorClipRef.current) {
-      resumeEditorClipRef.current = false
-      void event.currentTarget.play()
-    }
-  }
-
-  const handleViewerClipLoaded = (event: SyntheticEvent<HTMLVideoElement>) => {
-    if (!viewerClip) return
-    event.currentTarget.playbackRate = getClipPlaybackRate(viewerClip)
-    event.currentTarget.currentTime = pendingViewerSeekRef.current ?? viewerClip.trimStart
-    pendingViewerSeekRef.current = null
-    if (resumeViewerClipRef.current) {
-      resumeViewerClipRef.current = false
-      void event.currentTarget.play()
-    }
-  }
-
-  const handleClipTimeUpdate = (
-    event: SyntheticEvent<HTMLVideoElement>,
-    clip: VideoClip | undefined,
-    clipIndex: number,
-    target: 'editor' | 'viewer',
-  ) => {
-    const video = event.currentTarget
-    const elapsedBeforeClip = videoClips.slice(0, clipIndex).reduce((total, item) => {
-      const clipEnd = item.trimEnd > item.trimStart ? item.trimEnd : item.duration
-      return total + Math.max(0, clipEnd - item.trimStart)
-    }, 0)
-    setCurrentVideoTime(elapsedBeforeClip + Math.max(0, video.currentTime - (clip?.trimStart ?? 0)))
-    if (!clip || clip.trimEnd <= clip.trimStart || video.currentTime < clip.trimEnd) return
-
-    if (clipIndex < videoClips.length - 1) {
-      video.pause()
-      if (target === 'editor') {
-        resumeEditorClipRef.current = true
-        setEditorClipIndex(clipIndex + 1)
-      } else {
-        resumeViewerClipRef.current = true
-        setViewerClipIndex(clipIndex + 1)
-      }
-      return
-    }
-
-    video.pause()
-    video.currentTime = clip.trimEnd
-  }
-
-  const updateManual = (patch: Partial<Manual>) => {
-    setManuals((current) =>
-      current.map((manual) =>
-        manual.id === selectedManual.id
-          ? { ...manual, ...patch, updatedAt: new Date().toISOString().slice(0, 10) }
-          : manual,
-      ),
-    )
-  }
-
-  const updateDecisionNode = (nodeId: string, patch: Partial<DecisionNode>) => {
-    updateManual({
-      decisionNodes: decisionNodes.map((node) => (node.id === nodeId ? { ...node, ...patch } : node)),
-    })
-  }
-
-  const addDecisionNode = (type: DecisionNodeType) => {
-    const id = `decision-${Date.now()}`
-    const nextNode: DecisionNode = {
-      id,
-      type,
-      title: type === 'question' ? '確認する項目' : type === 'action' ? '実施する処置' : '処置を完了',
-      detail: type === 'question' ? '現場で判断する条件を入力します。' : '現場で実施する内容を入力します。',
-    }
-    updateManual({ decisionNodes: [...decisionNodes, nextNode] })
-  }
-
-  const removeDecisionNode = (nodeId: string) => {
-    if (decisionNodes.length <= 1) {
-      setFirebaseMessage('処置フローには少なくとも1つのノードが必要です')
-      return
-    }
-    const remainingNodes = decisionNodes
-      .filter((node) => node.id !== nodeId)
-      .map((node) => ({
-        ...node,
-        yesNodeId: node.yesNodeId === nodeId ? undefined : node.yesNodeId,
-        noNodeId: node.noNodeId === nodeId ? undefined : node.noNodeId,
-        nextNodeId: node.nextNodeId === nodeId ? undefined : node.nextNodeId,
-      }))
-    updateManual({
-      decisionNodes: remainingNodes,
-      decisionStartNodeId:
-        selectedManual.decisionStartNodeId === nodeId ? remainingNodes[0]?.id : selectedManual.decisionStartNodeId,
-    })
-    if (decisionNodeId === nodeId) {
-      setDecisionNodeId(remainingNodes[0]?.id ?? null)
-      setDecisionPath(remainingNodes[0] ? [remainingNodes[0].id] : [])
-    }
-  }
-
-  const resetDecisionReview = () => {
-    setDecisionNodeId(decisionStartNodeId)
-    setDecisionPath(decisionStartNodeId ? [decisionStartNodeId] : [])
-  }
-
-  const advanceDecision = (nextNodeId?: string) => {
-    if (!nextNodeId || !decisionNodeMap.has(nextNodeId)) {
-      setFirebaseMessage('次に進む分岐先を設定してください')
-      return
-    }
-    setDecisionNodeId(nextNodeId)
-    setDecisionPath((current) => [...current, nextNodeId])
-  }
-
-  const copyManualQrLink = async () => {
-    try {
-      await navigator.clipboard.writeText(manualQrUrl)
-      setFirebaseMessage('現場掲示用のQRリンクをコピーしました')
-    } catch {
-      setFirebaseMessage('リンクをコピーできませんでした。QRコードを読み取って利用してください')
-    }
-  }
-
-  const persistSelectedManual = async () => {
-    const latest = manuals.find((manual) => manual.id === selectedManual.id)
-    if (!latest) return
-
-    try {
-      await saveManual(latest)
-      setFirebaseMessage(`Firebase保存完了: ${latest.id}`)
-    } catch (error) {
-      setFirebaseMessage(error instanceof Error ? error.message : 'Firebase保存に失敗しました')
-    }
-  }
-
-  const handleVideoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-
-    if (!file.type.startsWith('video/')) {
-      setFirebaseMessage('動画ファイルを選択してください')
-      return
-    }
-
-    setIsUploading(true)
-    setFirebaseMessage(`動画アップロード中: ${file.name}`)
-
-    try {
-      const [thumbnail, videoUrl, duration] = await Promise.all([
-        captureVideoFileThumbnail(file),
-        uploadManualVideo(selectedManual.id, file),
-        getVideoDuration(file),
-      ])
-      const clip: VideoClip = {
-        id: `clip-${Date.now()}`,
-        name: file.name,
-        url: videoUrl,
-        duration,
-        trimStart: 0,
-        trimEnd: duration,
-      }
-      const updatedManual = {
-        ...selectedManual,
-        thumbnail,
-        videoUrl,
-        videoClips: [clip],
-        duration: formatVideoTime(duration),
-        updatedAt: new Date().toISOString().slice(0, 10),
-      }
-      setManuals((current) =>
-        current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)),
-      )
-      await saveManual(updatedManual)
-      setFirebaseMessage(`動画アップロード完了: ${file.name}`)
-    } catch (error) {
-      setFirebaseMessage(
-        error instanceof Error
-          ? `動画アップロード失敗: ${error.message}`
-          : '動画アップロードに失敗しました',
-      )
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const handleClipUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith('video/'))
-    event.target.value = ''
-    if (files.length === 0) {
-      setFirebaseMessage('動画ファイルを選択してください')
-      return
-    }
-
-    setIsUploading(true)
-    setFirebaseMessage(`${files.length}本の動画をアップロード中`)
-
-    try {
-      const uploadedClips = await Promise.all(
-        files.map(async (file, index): Promise<VideoClip> => {
-          const [url, duration] = await Promise.all([
-            uploadManualVideo(selectedManual.id, file),
-            getVideoDuration(file),
-          ])
+            accurac         ])
           return {
             id: `clip-${Date.now()}-${index}`,
             name: file.name,
@@ -2351,23 +2003,28 @@ function App() {
                 <div className="decision-authoring-layout">
                   <ol className="decision-tree-list" aria-label="処置フローのツリー">
                     {decisionNodes.map((node, index) => (
-                      <li className={node.id === decisionStartNodeId ? 'start-node' : ''} key={node.id}>
-                        <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
-                        <strong>{node.title || '名称未設定'}</strong>
-                        <small>
-                          {node.type === 'question'
-                            ? `YES: ${decisionNodeMap.get(node.yesNodeId ?? '')?.title ?? '未設定'} / NO: ${decisionNodeMap.get(node.noNodeId ?? '')?.title ?? '未設定'}`
-                            : node.type === 'action'
-                              ? `次へ: ${decisionNodeMap.get(node.nextNodeId ?? '')?.title ?? '未設定'}`
-                              : '処置フロー終了'}
-                        </small>
-                        <span className="decision-order">{index + 1}</span>
+                      <li
+                        className={`${node.id === decisionStartNodeId ? 'start-node' : ''} ${node.id === editingDecisionNode?.id ? 'selected-node' : ''}`}
+                        key={node.id}
+                      >
+                        <button type="button" onClick={() => setSelectedDecisionNodeId(node.id)}>
+                          <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
+                          <strong>{node.title || '名称未設定'}</strong>
+                          <small>
+                            {node.type === 'question'
+                              ? `YES: ${decisionNodeMap.get(node.yesNodeId ?? '')?.title ?? '未設定'} / NO: ${decisionNodeMap.get(node.noNodeId ?? '')?.title ?? '未設定'}`
+                              : node.type === 'action'
+                                ? `次へ: ${decisionNodeMap.get(node.nextNodeId ?? '')?.title ?? '未設定'}`
+                                : '処置フロー終了'}
+                          </small>
+                          <span className="decision-order">{index + 1}</span>
+                        </button>
                       </li>
                     ))}
                   </ol>
 
                   <div className="decision-node-list">
-                    {decisionNodes.map((node) => (
+                    {decisionNodes.filter((node) => node.id === editingDecisionNode?.id).map((node) => (
                       <article className="decision-node-editor" key={node.id}>
                         <div className="decision-node-editor-header">
                           <label className="node-type-select">
@@ -2422,49 +2079,81 @@ function App() {
                           />
                         </label>
                         {node.type === 'question' && (
-                          <div className="decision-link-fields">
-                            <label>
-                              YESの分岐先
-                              <select
+                          <>
+                            <div className="decision-link-fields">
+                              <label>
+                                YESの分岐先
+                                <select
+                                  disabled={isEditingLocked}
+                                  value={node.yesNodeId ?? ''}
+                                  onChange={(event) => updateDecisionNode(node.id, { yesNodeId: event.target.value || undefined })}
+                                >
+                                  <option value="">選択してください</option>
+                                  {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
+                                    <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label>
+                                NOの分岐先
+                                <select
+                                  disabled={isEditingLocked}
+                                  value={node.noNodeId ?? ''}
+                                  onChange={(event) => updateDecisionNode(node.id, { noNodeId: event.target.value || undefined })}
+                                >
+                                  <option value="">選択してください</option>
+                                  {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
+                                    <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                            <div className="decision-quick-adds">
+                              <button
                                 disabled={isEditingLocked}
-                                value={node.yesNodeId ?? ''}
-                                onChange={(event) => updateDecisionNode(node.id, { yesNodeId: event.target.value || undefined })}
+                                type="button"
+                                onClick={() => addDecisionNode('action', { nodeId: node.id, field: 'yesNodeId' })}
                               >
-                                <option value="">選択してください</option>
-                                {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
-                                  <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              NOの分岐先
-                              <select
+                                <Plus size={15} aria-hidden="true" />
+                                YESの先に処置を追加
+                              </button>
+                              <button
                                 disabled={isEditingLocked}
-                                value={node.noNodeId ?? ''}
-                                onChange={(event) => updateDecisionNode(node.id, { noNodeId: event.target.value || undefined })}
+                                type="button"
+                                onClick={() => addDecisionNode('action', { nodeId: node.id, field: 'noNodeId' })}
                               >
-                                <option value="">選択してください</option>
-                                {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
-                                  <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
-                                ))}
-                              </select>
-                            </label>
-                          </div>
+                                <Plus size={15} aria-hidden="true" />
+                                NOの先に処置を追加
+                              </button>
+                            </div>
+                          </>
                         )}
                         {node.type === 'action' && (
-                          <label>
-                            次の処置
-                            <select
-                              disabled={isEditingLocked}
-                              value={node.nextNodeId ?? ''}
-                              onChange={(event) => updateDecisionNode(node.id, { nextNodeId: event.target.value || undefined })}
-                            >
-                              <option value="">選択してください</option>
-                              {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
-                                <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
-                              ))}
-                            </select>
-                          </label>
+                          <>
+                            <label>
+                              次の処置
+                              <select
+                                disabled={isEditingLocked}
+                                value={node.nextNodeId ?? ''}
+                                onChange={(event) => updateDecisionNode(node.id, { nextNodeId: event.target.value || undefined })}
+                              >
+                                <option value="">選択してください</option>
+                                {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
+                                  <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className="decision-quick-adds single-action">
+                              <button
+                                disabled={isEditingLocked}
+                                type="button"
+                                onClick={() => addDecisionNode('question', { nodeId: node.id, field: 'nextNodeId' })}
+                              >
+                                <Plus size={15} aria-hidden="true" />
+                                次に判断を追加
+                              </button>
+                            </div>
+                          </>
                         )}
                       </article>
                     ))}
@@ -2716,151 +2405,7 @@ function App() {
                     <strong>{selectedManual.steps.flatMap((step) => step.inspectionImages ?? []).length}</strong>
                     判定資料
                   </span>
-                </div>
-              </section>
-              <section className="manual-qr-panel" id="manual-qr-panel">
-                <div className="manual-qr-copy">
-                  <p className="eyebrow">現場掲示用</p>
-                  <h2>この作業のQRコード</h2>
-                  <p>
-                    現場で読み取ると、このマニュアルの閲覧画面を直接開きます。
-                  </p>
-                  {!isPublished && <span className="qr-draft-note">公開前のマニュアルです</span>}
-                </div>
-                <QRCodeSVG
-                  aria-label={`${selectedManual.title}を開くQRコード`}
-                  bgColor="#ffffff"
-                  className="manual-qr-code"
-                  fgColor="#17202f"
-                  level="M"
-                  marginSize={2}
-                  size={164}
-                  value={manualQrUrl}
-                />
-                <div className="manual-qr-actions">
-                  <button type="button" onClick={copyManualQrLink}>
-                    <Copy size={16} aria-hidden="true" />
-                    リンクをコピー
-                  </button>
-                  <button type="button" onClick={() => window.print()}>
-                    <Printer size={16} aria-hidden="true" />
-                    QRコードを印刷
-                  </button>
-                </div>
-                <small>整理No: {selectedManual.controlNo ?? '未設定'}</small>
-              </section>
-            </aside>
-          </div>
-        )}
-
-        {view === 'decision' && isAbnormalManual && (
-          <div className="decision-review-view">
-            <aside className="decision-review-tree">
-              <header className="decision-section-header">
-                <div>
-                  <p className="eyebrow">レビュー用ツリー</p>
-                  <h2>異常処置の全体像</h2>
-                </div>
-                <button type="button" onClick={resetDecisionReview}>
-                  <RotateCcw size={16} aria-hidden="true" />
-                  最初から
-                </button>
-              </header>
-              <ol className="decision-review-list">
-                {decisionNodes.map((node) => (
-                  <li
-                    className={`${decisionPath.includes(node.id) ? 'visited' : ''} ${activeDecisionNode?.id === node.id ? 'current' : ''}`}
-                    key={node.id}
-                  >
-                    <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
-                    <div>
-                      <strong>{node.title || '名称未設定'}</strong>
-                      <small>{node.detail || '説明を入力してください'}</small>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </aside>
-
-            <section className="decision-runner" aria-live="polite">
-              {activeDecisionNode ? (
-                <>
-                  <div className="decision-runner-progress">
-                    <span>処置確認</span>
-                    <span>{decisionPath.length} / {decisionNodes.length}</span>
-                  </div>
-                  <span className={`decision-type large ${activeDecisionNode.type}`}>
-                    {decisionNodeTypeLabels[activeDecisionNode.type]}
-                  </span>
-                  <h2>{activeDecisionNode.title || '名称未設定'}</h2>
-                  <p>{activeDecisionNode.detail || '現場への指示を入力してください。'}</p>
-                  {activeDecisionNode.type === 'question' && (
-                    <div className="decision-answer-actions">
-                      <button className="decision-answer yes" type="button" onClick={() => advanceDecision(activeDecisionNode.yesNodeId)}>
-                        YES
-                      </button>
-                      <button className="decision-answer no" type="button" onClick={() => advanceDecision(activeDecisionNode.noNodeId)}>
-                        NO
-                      </button>
-                    </div>
-                  )}
-                  {activeDecisionNode.type === 'action' && (
-                    <button className="decision-next-action" type="button" onClick={() => advanceDecision(activeDecisionNode.nextNodeId)}>
-                      処置を実施した。次へ進む
-                    </button>
-                  )}
-                  {activeDecisionNode.type === 'end' && (
-                    <div className="decision-complete-state">
-                      <CheckCircle2 size={30} aria-hidden="true" />
-                      <strong>処置フローを完了しました</strong>
-                      <button type="button" onClick={resetDecisionReview}>
-                        最初から確認する
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="decision-empty-state">
-                  <GitBranch size={34} aria-hidden="true" />
-                  <h2>処置フローがありません</h2>
-                  <p>作成画面で判断または処置を追加してください。</p>
-                  <button type="button" onClick={() => setView('edit')}>作成画面へ</button>
-                </div>
-              )}
-            </section>
-          </div>
-        )}
-
-        {view === 'flash' && (
-          <div className="flash-test-view">
-            <aside className="flash-test-summary">
-              <div>
-                <p className="eyebrow">検査判定トレーニング</p>
-                <h2>フラッシュテスト</h2>
-              </div>
-              <label className="flash-worker-field">
-                作業者
-                <input
-                  value={flashWorker}
-                  onChange={(event) => setFlashWorker(event.target.value)}
-                  placeholder="作業者名を入力"
-                  disabled={Boolean(flashCard)}
-                />
-              </label>
-              <div className="flash-score">
-                <span>
-                  <strong>{flashScore}</strong>
-                  正解
-                </span>
-                <span>
-                  <strong>{flashTotal}</strong>
-                  回答
-                </span>
-                <span>
-                  <strong>{ngFlashCardCount}</strong>
-                  NG写真
-                </span>
-              </div>
+                </d        </div>
               <button type="button" onClick={startFlashTest} disabled={flashCards.length === 0}>
                 <Sparkles size={18} aria-hidden="true" />
                 新しい出題を開始
