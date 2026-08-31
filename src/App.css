@@ -1704,6 +1704,100 @@ textarea {
   color: #166534;
 }
 
+.simple-workflow {
+  gap: 20px;
+}
+
+.workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-steps li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.workflow-steps li:not(:last-child)::after {
+  position: absolute;
+  top: 15px;
+  left: calc(50% + 22px);
+  width: calc(100% - 42px);
+  height: 2px;
+  background: #dbe4ef;
+  content: '';
+}
+
+.workflow-steps span {
+  position: relative;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.workflow-steps li.done,
+.workflow-steps li.current {
+  color: #1d4ed8;
+}
+
+.workflow-steps li.done span,
+.workflow-steps li.current span {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.workflow-steps li.done::after {
+  background: #2563eb;
+}
+
+.workflow-next-action {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #f5faff;
+}
+
+.workflow-next-action > p {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.workflow-next-action > button:first-of-type {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 800;
+}
+
+.workflow-next-action .return-action {
+  justify-self: start;
+}
+
 .check-list {
   display: grid;
   gap: 10px;
