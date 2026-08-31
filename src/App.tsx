@@ -49,10 +49,11 @@ import {
   subscribeFlashTestResults,
   subscribeManuals,
   uploadInspectionImage,
+  uploadManualImage,
   uploadManualVideo,
 } from './manualRepository'
 import { translateManualContent } from './translationRepository'
-import type { ApprovalEvent, ApprovalStatus, DecisionNode, DecisionNodeType, FlashTestResult, InspectionImage, InspectionImageKind, Manual, ManualLanguage, ReviewCheck, Step, VideoClip } from './types'
+import type { ApprovalEvent, ApprovalStatus, DecisionNode, DecisionNodeType, FlashTestResult, InspectionImage, InspectionImageKind, Manual, ManualImage, ManualLanguage, ReviewCheck, Step, VideoClip } from './types'
 
 const initialManuals: Manual[] = [
   {
@@ -264,6 +265,7 @@ function normalizeManual(manual: Manual): Manual {
     ...manual,
     kind: manual.kind ?? 'standard',
     decisionNodes: manual.decisionNodes ?? [],
+    manualImages: manual.manualImages ?? [],
     checks,
     approvalHistory: manual.approvalHistory ?? [],
   }
@@ -916,6 +918,48 @@ function App() {
     }
   }
 
+  const handleManualImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith('image/'))
+    event.target.value = ''
+    if (files.length === 0) {
+      setFirebaseMessage('画像ファイルを選択してください')
+      return
+    }
+
+    setIsUploading(true)
+    setFirebaseMessage(`${files.length}枚の写真をアップロード中`)
+    try {
+      const uploadedImages = await Promise.all(
+        files.map(async (file, index): Promise<ManualImage> => ({
+          id: `manual-image-${Date.now()}-${index}`,
+          name: file.name,
+          url: await uploadManualImage(selectedManual.id, file),
+          uploadedAt: new Date().toISOString(),
+        })),
+      )
+      const updatedManual: Manual = {
+        ...selectedManual,
+        manualImages: [...(selectedManual.manualImages ?? []), ...uploadedImages],
+        thumbnail: selectedManual.videoUrl ? selectedManual.thumbnail : uploadedImages[0].url,
+        updatedAt: new Date().toISOString().slice(0, 10),
+      }
+      setManuals((current) =>
+        current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)),
+      )
+      await saveManual(updatedManual)
+      setFirebaseMessage(`${uploadedImages.length}枚の写真を追加しました`)
+    } catch (error) {
+      setFirebaseMessage(error instanceof Error ? `写真アップロード失敗: ${error.message}` : '写真アップロードに失敗しました')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const removeManualImage = (imageId: string) => {
+    updateManual({ manualImages: (selectedManual.manualImages ?? []).filter((image) => image.id !== imageId) })
+    setFirebaseMessage('写真を一覧から外しました。Firebaseへ保存すると反映されます。')
+  }
+
   const handleClipUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith('video/'))
     event.target.value = ''
@@ -1378,7 +1422,7 @@ function App() {
       !selectedManual.controlNo && '整理No',
       !selectedManual.productName && '品名',
       !selectedManual.owner && '作成者',
-      !isAbnormalManual && !selectedManual.videoUrl && '動画',
+      !isAbnormalManual && !selectedManual.videoUrl && (selectedManual.manualImages?.length ?? 0) === 0 && '動画または写真資料',
       isAbnormalManual ? decisionNodes.length === 0 && '処置フロー' : selectedManual.steps.length === 0 && '手順',
     ].filter(Boolean)
 
@@ -1645,6 +1689,7 @@ function App() {
       duration: '00:00',
       updatedAt: new Date().toISOString().slice(0, 10),
       videoUrl: '',
+      manualImages: [],
       thumbnail:
         'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
       tags: ['未分類'],
@@ -1685,6 +1730,7 @@ function App() {
       duration: '分岐型',
       updatedAt: new Date().toISOString().slice(0, 10),
       videoUrl: '',
+      manualImages: [],
       thumbnail:
         'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1200&q=80',
       tags: ['異常対応', '処置フロー'],
@@ -1719,6 +1765,7 @@ function App() {
         inspectionImages: step.inspectionImages?.map((image) => ({ ...image })),
       })),
       videoClips: selectedManual.videoClips?.map((clip) => ({ ...clip })),
+      manualImages: selectedManual.manualImages?.map((image) => ({ ...image })),
       decisionNodes: selectedManual.decisionNodes?.map((node) => ({ ...node })),
       approvalHistory: [
         {
@@ -1939,6 +1986,17 @@ function App() {
                     type="file"
                   />
                 </label>
+                <label className="upload-control secondary-upload">
+                  <UploadCloud size={18} aria-hidden="true" />
+                  写真を追加
+                  <input
+                    accept="image/*"
+                    disabled={isUploading || isEditingLocked}
+                    multiple
+                    onChange={handleManualImageUpload}
+                    type="file"
+                  />
+                </label>
                 <button
                   disabled={!editorClip || isEditingLocked}
                   type="button"
@@ -1952,6 +2010,31 @@ function App() {
                   Firebaseへ保存
                 </button>
               </div>
+              {(selectedManual.manualImages?.length ?? 0) > 0 && (
+                <section className="manual-image-panel">
+                  <div className="section-heading compact-heading">
+                    <h2>作業写真</h2>
+                    <span>{selectedManual.manualImages?.length ?? 0} 枚</span>
+                  </div>
+                  <div className="manual-image-gallery">
+                    {(selectedManual.manualImages ?? []).map((image) => (
+                      <article key={image.id}>
+                        <img src={image.url} alt={image.name} />
+                        <strong>{image.name}</strong>
+                        <button
+                          aria-label={`${image.name}を削除`}
+                          disabled={isEditingLocked}
+                          title="写真を削除"
+                          type="button"
+                          onClick={() => removeManualImage(image.id)}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
               {videoClips.length > 0 && (
                 <section className="clip-editor">
                   <div className="section-heading compact-heading">
@@ -2714,6 +2797,25 @@ function App() {
                   </div>
                 </div>
               </div>
+              {(selectedManual.manualImages?.length ?? 0) > 0 && (
+                <section className="viewer-manual-images">
+                  <header className="section-heading compact-heading">
+                    <div>
+                      <p className="eyebrow">写真資料</p>
+                      <h2>作業を画像で確認</h2>
+                    </div>
+                    <span>{selectedManual.manualImages?.length ?? 0} 枚</span>
+                  </header>
+                  <div className="viewer-manual-image-gallery">
+                    {(selectedManual.manualImages ?? []).map((image) => (
+                      <figure key={image.id}>
+                        <img src={image.url} alt={image.name} />
+                        <figcaption>{image.name}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </section>
+              )}
             </section>
 
             <aside className="library-step-panel">
