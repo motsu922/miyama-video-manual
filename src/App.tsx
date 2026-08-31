@@ -1564,7 +1564,134 @@ function App() {
       return
     }
     if (flashCards.length === 0) {
-      setFiers: ['承認者を追加'],
+      setFirebaseMessage('フラッシュテストには、手順ごとにOK写真またはNG例写真を登録してください')
+      return
+    }
+    const queue = shuffleCards(flashCards)
+    setFlashScore(0)
+    setFlashTotal(0)
+    setFlashCard(queue[0] ?? null)
+    setFlashQueue(queue.slice(1))
+  }
+
+  const answerFlashTest = (answer: FlashAnswer) => {
+    if (!flashCard) return
+    const correct = answer === flashCard.image.kind
+    setFlashTotal((current) => current + 1)
+    if (correct) {
+      setFlashScore((current) => current + 1)
+    }
+    const nextCard = flashQueue[0] ?? null
+    setFlashQueue((current) => current.slice(1))
+    setFlashCard(nextCard)
+    if (!nextCard) {
+      setFirebaseMessage('今回の出題を完了しました。すべてのNG写真を1回以上出題しています')
+    }
+
+    void recordFlashTestResult({
+      manualId: selectedManual.id,
+      worker: flashWorker.trim(),
+      imageId: flashCard.image.id,
+      imageName: flashCard.image.name,
+      imageKind: flashCard.image.kind as FlashAnswer,
+      stepId: flashCard.step.id,
+      stepTitle: flashCard.step.title,
+      answer,
+      correct,
+      answeredAt: new Date().toISOString(),
+    }).catch((error) =>
+      setFirebaseMessage(error instanceof Error ? error.message : 'フラッシュテスト結果の保存に失敗しました'),
+    )
+  }
+
+  const seekViewerStep = async (step: Step) => {
+    const video = viewerVideoRef.current
+    if (!video || !viewerClip) {
+      setCurrentVideoTime(parseStepTime(step.time))
+      viewerStepsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      return
+    }
+
+    const seconds = parseStepTime(step.time)
+    setCurrentVideoTime(seconds)
+    const position = getComposedPosition(seconds)
+    if (position.index !== viewerClipIndex) {
+      pendingViewerSeekRef.current = position.time
+      resumeViewerClipRef.current = true
+      setViewerClipIndex(position.index)
+      return
+    }
+    video.currentTime = position.time
+    video.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    try {
+      await video.play()
+    } catch {
+      setFirebaseMessage('動画の再生ボタンを押して開始してください')
+    }
+  }
+
+  const createManual = () => {
+    const id = `M-${Math.floor(1000 + Math.random() * 8999)}`
+    const manual: Manual = {
+      id,
+      title: '新規動画マニュアル',
+      workName: '新規検査作業',
+      controlNo: `INS-${new Date().getFullYear()}-${id.replace('M-', '')}`,
+      productName: '品名未設定',
+      department: '未設定',
+      owner: '作成者',
+      status: 'draft',
+      version: 'v0.1',
+      duration: '00:00',
+      updatedAt: new Date().toISOString().slice(0, 10),
+      videoUrl: '',
+      thumbnail:
+        'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
+      tags: ['未分類'],
+      kind: 'standard',
+      reviewers: ['承認者を追加'],
+      checks: [{ id: 'content', label: '動画と手順の整合性を確認', checked: false }],
+      approvalHistory: [
+        { id: `created-${id}`, action: 'created', actor: '作成者', createdAt: new Date().toISOString() },
+      ],
+      inspectionImages: [],
+      steps: [
+        {
+          id: 1,
+          time: '00:00',
+          title: '手順タイトル',
+          detail: '現場で迷わないように、短い文章で入力します。',
+        },
+      ],
+    }
+    void saveWorkflowManual(manual, '新規マニュアルをFirebaseへ保存しました')
+    setSelectedId(id)
+    setView('edit')
+  }
+
+  const createAbnormalManual = () => {
+    const id = `A-${Math.floor(1000 + Math.random() * 8999)}`
+    const decisionNodes = createDefaultDecisionNodes()
+    const manual: Manual = {
+      id,
+      title: '新規異常処置マニュアル',
+      workName: '異常処置',
+      controlNo: `ABN-${new Date().getFullYear()}-${id.replace('A-', '')}`,
+      productName: '対象品を入力',
+      department: '未設定',
+      owner: '作成者',
+      status: 'draft',
+      version: 'v0.1',
+      duration: '分岐型',
+      updatedAt: new Date().toISOString().slice(0, 10),
+      videoUrl: '',
+      thumbnail:
+        'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1200&q=80',
+      tags: ['異常対応', '処置フロー'],
+      kind: 'abnormal',
+      decisionNodes,
+      decisionStartNodeId: decisionNodes[0].id,
+      reviewers: ['承認者を追加'],
       checks: [{ id: 'flow', label: 'YES／NOの分岐と処置内容を確認', checked: false }],
       approvalHistory: [
         { id: `created-${id}`, action: 'created', actor: '作成者', createdAt: new Date().toISOString() },
