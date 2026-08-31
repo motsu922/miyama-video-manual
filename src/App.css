@@ -1137,6 +1137,134 @@ textarea {
   color: #fff;
 }
 
+.decision-flowchart {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #d6e3f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.decision-flowchart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.decision-flowchart-heading .eyebrow {
+  margin: 0;
+}
+
+.decision-flowchart-heading span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.decision-flowchart-scroll {
+  overflow: auto;
+  border: 1px solid #e4ebf4;
+  border-radius: 7px;
+  background-color: #f8fbff;
+  background-image: linear-gradient(#e5edf7 1px, transparent 1px), linear-gradient(90deg, #e5edf7 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.decision-flowchart svg {
+  min-width: 720px;
+  display: block;
+}
+
+.decision-flow-edge path {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 2.5;
+}
+
+.decision-flow-edge marker path {
+  fill: #94a3b8;
+}
+
+.decision-flow-edge text {
+  fill: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.decision-flow-edge.yes path,
+.decision-flow-edge.yes marker path {
+  stroke: #15803d;
+  fill: #15803d;
+}
+
+.decision-flow-edge.yes text {
+  fill: #15803d;
+}
+
+.decision-flow-edge.no path,
+.decision-flow-edge.no marker path {
+  stroke: #b91c1c;
+  fill: #b91c1c;
+}
+
+.decision-flow-edge.no text {
+  fill: #b91c1c;
+}
+
+.decision-flow-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.decision-flow-node rect {
+  fill: #eff6ff;
+  stroke: #60a5fa;
+  stroke-width: 2;
+}
+
+.decision-flow-node.action rect {
+  fill: #fff7ed;
+  stroke: #fb923c;
+}
+
+.decision-flow-node.end rect {
+  fill: #f0fdf4;
+  stroke: #4ade80;
+}
+
+.decision-flow-node.start rect {
+  stroke-width: 3;
+}
+
+.decision-flow-node.selected rect,
+.decision-flow-node:focus rect {
+  stroke: #0f766e;
+  stroke-width: 4;
+}
+
+.decision-flow-kind {
+  fill: #1d4ed8;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.decision-flow-node.action .decision-flow-kind {
+  fill: #c2410c;
+}
+
+.decision-flow-node.end .decision-flow-kind {
+  fill: #15803d;
+}
+
+.decision-flow-title {
+  fill: #17202f;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .decision-authoring-layout {
   display: grid;
   grid-template-columns: minmax(240px, 0.66fr) minmax(420px, 1.34fr);
