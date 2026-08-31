@@ -891,6 +891,67 @@ function App() {
     })
   }
 
+  const handleDecisionMediaUpload = async (nodeId: string, event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []).filter(
+      (file) => file.type.startsWith('image/') || file.type.startsWith('video/'),
+    )
+    event.target.value = ''
+    if (files.length === 0) {
+      setFirebaseMessage('画像または動画ファイルを選択してください')
+      return
+    }
+
+    setIsUploading(true)
+    setFirebaseMessage(`${files.length}件のノード資料をアップロード中`)
+    try {
+      const uploadedAt = new Date().toISOString()
+      const media = await Promise.all(
+        files.map(async (file, index) => ({
+          id: `decision-media-${Date.now()}-${index}`,
+          kind: file.type.startsWith('image/') ? ('image' as const) : ('video' as const),
+          name: file.name,
+          url: file.type.startsWith('image/')
+            ? await uploadManualImage(selectedManual.id, file)
+            : await uploadManualVideo(selectedManual.id, file),
+          uploadedAt,
+        })),
+      )
+      const updatedNodes = decisionNodes.map((node) =>
+        node.id === nodeId ? { ...node, media: [...(node.media ?? []), ...media] } : node,
+      )
+      const updatedManual: Manual = {
+        ...selectedManual,
+        decisionNodes: updatedNodes,
+        updatedAt: new Date().toISOString().slice(0, 10),
+      }
+      setManuals((current) => current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)))
+      await saveManual(updatedManual)
+      setFirebaseMessage(`${media.length}件のノード資料を追加しました`)
+    } catch (error) {
+      setFirebaseMessage(error instanceof Error ? `ノード資料のアップロード失敗: ${error.message}` : 'ノード資料のアップロードに失敗しました')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const removeDecisionMedia = async (nodeId: string, mediaId: string) => {
+    const updatedNodes = decisionNodes.map((node) =>
+      node.id === nodeId ? { ...node, media: (node.media ?? []).filter((media) => media.id !== mediaId) } : node,
+    )
+    const updatedManual: Manual = {
+      ...selectedManual,
+      decisionNodes: updatedNodes,
+      updatedAt: new Date().toISOString().slice(0, 10),
+    }
+    setManuals((current) => current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)))
+    try {
+      await saveManual(updatedManual)
+      setFirebaseMessage('ノード資料を削除しました')
+    } catch (error) {
+      setFirebaseMessage(error instanceof Error ? `ノード資料の保存失敗: ${error.message}` : 'ノード資料の保存に失敗しました')
+    }
+  }
+
   const addDecisionNode = (
     type: DecisionNodeType,
     link?: { nodeId: string; field: 'yesNodeId' | 'noNodeId' | 'nextNodeId' },
@@ -2705,6 +2766,53 @@ function App() {
                             onChange={(event) => updateDecisionNode(node.id, { detail: event.target.value })}
                           />
                         </label>
+                        <section className="decision-media-section" aria-label="ノードの参照資料">
+                          <header>
+                            <div>
+                              <strong>参照資料</strong>
+                              <small>現場で確認する画像・動画</small>
+                            </div>
+                            <label className="decision-media-upload">
+                              <UploadCloud size={16} aria-hidden="true" />
+                              資料を追加
+                              <input
+                                accept="image/*,video/*"
+                                disabled={isEditingLocked || isUploading}
+                                multiple
+                                type="file"
+                                onChange={(event) => void handleDecisionMediaUpload(node.id, event)}
+                              />
+                            </label>
+                          </header>
+                          {node.media?.length ? (
+                            <div className="decision-media-list">
+                              {node.media.map((media) => (
+                                <article key={media.id}>
+                                  {media.kind === 'image' ? (
+                                    <img src={media.url} alt={media.name} />
+                                  ) : (
+                                    <video controls playsInline preload="metadata" src={media.url} />
+                                  )}
+                                  <div>
+                                    <span>{media.kind === 'image' ? '画像' : '動画'}</span>
+                                    <strong title={media.name}>{media.name}</strong>
+                                  </div>
+                                  <button
+                                    aria-label={`${media.name}を削除`}
+                                    disabled={isEditingLocked}
+                                    title="資料を削除"
+                                    type="button"
+                                    onClick={() => void removeDecisionMedia(node.id, media.id)}
+                                  >
+                                    <Trash2 size={15} aria-hidden="true" />
+                                  </button>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="decision-media-empty">登録された資料はありません</p>
+                          )}
+                        </section>
                         {node.type === 'question' && (
                           <>
                             <div className="decision-link-fields">
@@ -3158,6 +3266,23 @@ function App() {
                   </span>
                   <h2>{activeDecisionNode.title || '名称未設定'}</h2>
                   <p>{activeDecisionNode.detail || '現場への指示を入力してください。'}</p>
+                  {activeDecisionNode.media?.length ? (
+                    <section className="decision-runner-media" aria-label="この手順の参照資料">
+                      {activeDecisionNode.media.map((media) =>
+                        media.kind === 'image' ? (
+                          <figure key={media.id}>
+                            <img src={media.url} alt={media.name} />
+                            <figcaption>{media.name}</figcaption>
+                          </figure>
+                        ) : (
+                          <figure key={media.id}>
+                            <video controls playsInline preload="metadata" src={media.url} />
+                            <figcaption>{media.name}</figcaption>
+                          </figure>
+                        ),
+                      )}
+                    </section>
+                  ) : null}
                   {activeDecisionNode.type === 'question' && (
                     <div className="decision-answer-actions">
                       <button className="decision-answer yes" type="button" onClick={() => advanceDecision(activeDecisionNode.yesNodeId)}>
