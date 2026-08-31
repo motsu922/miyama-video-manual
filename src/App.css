@@ -1180,34 +1180,31 @@ textarea {
 .decision-flow-edge path {
   fill: none;
   stroke: #94a3b8;
-  stroke-width: 2.5;
-}
-
-.decision-flow-edge marker path {
-  fill: #94a3b8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.25;
 }
 
 .decision-flow-edge text {
   fill: #475569;
   font-size: 12px;
   font-weight: 800;
+  paint-order: stroke;
+  stroke: #f8fbff;
+  stroke-width: 4px;
   text-anchor: middle;
 }
 
-.decision-flow-edge.yes path,
-.decision-flow-edge.yes marker path {
+.decision-flow-edge.yes path {
   stroke: #15803d;
-  fill: #15803d;
 }
 
 .decision-flow-edge.yes text {
   fill: #15803d;
 }
 
-.decision-flow-edge.no path,
-.decision-flow-edge.no marker path {
+.decision-flow-edge.no path {
   stroke: #b91c1c;
-  fill: #b91c1c;
 }
 
 .decision-flow-edge.no text {
@@ -1261,7 +1258,7 @@ textarea {
 
 .decision-flow-title {
   fill: #17202f;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 
