@@ -82,11 +82,20 @@ export type ManualKind = 'standard' | 'abnormal'
 
 export type DecisionNodeType = 'question' | 'action' | 'end'
 
+export type DecisionNodeMedia = {
+  id: string
+  kind: 'image' | 'video'
+  name: string
+  url: string
+  uploadedAt: string
+}
+
 export type DecisionNode = {
   id: string
   type: DecisionNodeType
   title: string
   detail: string
+  media?: DecisionNodeMedia[]
   yesNodeId?: string
   noNodeId?: string
   nextNodeId?: string
