@@ -69,6 +69,13 @@ export type VideoClip = {
   captionPosition?: 'top' | 'center' | 'bottom'
 }
 
+export type ManualImage = {
+  id: string
+  name: string
+  url: string
+  uploadedAt: string
+}
+
 export type ManualLanguage = 'ja' | 'th' | 'pt'
 
 export type ManualKind = 'standard' | 'abnormal'
@@ -114,6 +121,7 @@ export type Manual = {
   updatedAt: string
   videoUrl: string
   videoClips?: VideoClip[]
+  manualImages?: ManualImage[]
   thumbnail: string
   tags: string[]
   steps: Step[]
