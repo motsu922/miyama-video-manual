@@ -571,7 +571,369 @@ function App() {
             card,
             total: responses.length,
             correct,
-            accurac         ])
+            accuracy: responses.length === 0 ? null : Math.round((correct / responses.length) * 100),
+          }
+        })
+        .sort((left, right) => (left.accuracy ?? -1) - (right.accuracy ?? -1)),
+    [flashCards, flashResults],
+  )
+  const flashWorkerAnalysis = useMemo(() => {
+    const workers = new Map<string, { total: number; correct: number; latest: string }>()
+    flashResults.forEach((result) => {
+      const current = workers.get(result.worker) ?? { total: 0, correct: 0, latest: result.answeredAt }
+      current.total += 1
+      current.correct += Number(result.correct)
+      if (result.answeredAt > current.latest) current.latest = result.answeredAt
+      workers.set(result.worker, current)
+    })
+    return [...workers.entries()]
+      .map(([worker, result]) => ({
+        worker,
+        ...result,
+        accuracy: Math.round((result.correct / result.total) * 100),
+      }))
+      .sort((left, right) => right.latest.localeCompare(left.latest))
+  }, [flashResults])
+
+  useEffect(() => {
+    const unsubscribe = subscribeManuals(
+      (cloudManuals) => {
+        if (cloudManuals.length > 0) {
+          setManuals(cloudManuals.map(normalizeManual))
+          setSelectedId((current) =>
+            cloudManuals.some((manual) => manual.id === current) ? current : cloudManuals[0].id,
+          )
+          setFirebaseMessage('Firebase接続中: videoManuals を参照しています')
+          return
+        }
+        setFirebaseMessage('Firebase接続中: videoManuals は空のためサンプルを表示しています')
+      },
+      (message) => setFirebaseMessage(message),
+    )
+
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    if (hasOpenedQrManual || !qrManualId || !manuals.some((manual) => manual.id === qrManualId)) return
+    setSelectedId(qrManualId)
+    setView('library')
+    setHasOpenedQrManual(true)
+  }, [hasOpenedQrManual, manuals, qrManualId])
+
+  useEffect(() => {
+    setFlashCard(null)
+    setFlashQueue([])
+    setFlashScore(0)
+    setFlashTotal(0)
+    setEditorClipIndex(0)
+    setViewerClipIndex(0)
+    setViewerLanguage('ja')
+    const manual = selectedManualRef.current
+    const startNodeId = manual.decisionStartNodeId ?? manual.decisionNodes?.[0]?.id ?? null
+    setDecisionNodeId(startNodeId)
+    setDecisionPath(startNodeId ? [startNodeId] : [])
+    setSelectedDecisionNodeId(startNodeId)
+  }, [selectedManual.id])
+
+  useEffect(() => {
+    let active = true
+    let unsubscribe: () => void = () => {}
+    setFlashResults([])
+
+    void ensureSignedIn()
+      .then(() => {
+        if (!active) return
+        unsubscribe = subscribeFlashTestResults(
+          selectedManual.id,
+          (results) =>
+            active &&
+            setFlashResults([...results].sort((left, right) => right.answeredAt.localeCompare(left.answeredAt))),
+          (message) => active && setFirebaseMessage(message),
+        )
+      })
+      .catch(() => active && setFlashResults([]))
+
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [selectedManual.id])
+
+  const filteredManuals = useMemo(() => {
+    const keyword = query.trim().toLowerCase()
+    if (!keyword) return manuals
+    return manuals.filter((manual) =>
+      [
+        manual.title,
+        manual.workName ?? '',
+        manual.controlNo ?? '',
+        manual.productName ?? '',
+        manual.department,
+        manual.owner,
+        ...manual.tags,
+      ].some((value) =>
+        value.toLowerCase().includes(keyword),
+      ),
+    )
+  }, [manuals, query])
+
+  const activeStep = useMemo(() => {
+    return selectedManual.steps.reduce((active, step) => {
+      return parseStepTime(step.time) <= currentVideoTime ? step : active
+    }, selectedManual.steps[0])
+  }, [currentVideoTime, selectedManual.steps])
+
+  const getComposedPosition = (seconds: number) => {
+    let elapsed = 0
+    for (const [index, clip] of videoClips.entries()) {
+      const clipEnd = clip.trimEnd > clip.trimStart ? clip.trimEnd : clip.duration
+      const playableDuration = Math.max(0, clipEnd - clip.trimStart)
+      const isLastClip = index === videoClips.length - 1
+      if (playableDuration === 0 && isLastClip) {
+        return { index, time: clip.trimStart + Math.max(0, seconds - elapsed) }
+      }
+      if (seconds <= elapsed + playableDuration || isLastClip) {
+        return { index, time: Math.min(clipEnd, clip.trimStart + Math.max(0, seconds - elapsed)) }
+      }
+      elapsed += playableDuration
+    }
+    return { index: 0, time: 0 }
+  }
+
+  const seekToStep = (step: Step) => {
+    const seconds = parseStepTime(step.time)
+    setCurrentVideoTime(seconds)
+    const position = getComposedPosition(seconds)
+    if (position.index !== editorClipIndex) {
+      pendingEditorSeekRef.current = position.time
+      setEditorClipIndex(position.index)
+      return
+    }
+    if (videoRef.current) {
+      videoRef.current.currentTime = position.time
+      void videoRef.current.play()
+    }
+  }
+
+  const handleEditorClipLoaded = (event: SyntheticEvent<HTMLVideoElement>) => {
+    if (!editorClip) return
+    event.currentTarget.playbackRate = getClipPlaybackRate(editorClip)
+    event.currentTarget.currentTime = pendingEditorSeekRef.current ?? editorClip.trimStart
+    pendingEditorSeekRef.current = null
+    if (resumeEditorClipRef.current) {
+      resumeEditorClipRef.current = false
+      void event.currentTarget.play()
+    }
+  }
+
+  const handleViewerClipLoaded = (event: SyntheticEvent<HTMLVideoElement>) => {
+    if (!viewerClip) return
+    event.currentTarget.playbackRate = getClipPlaybackRate(viewerClip)
+    event.currentTarget.currentTime = pendingViewerSeekRef.current ?? viewerClip.trimStart
+    pendingViewerSeekRef.current = null
+    if (resumeViewerClipRef.current) {
+      resumeViewerClipRef.current = false
+      void event.currentTarget.play()
+    }
+  }
+
+  const handleClipTimeUpdate = (
+    event: SyntheticEvent<HTMLVideoElement>,
+    clip: VideoClip | undefined,
+    clipIndex: number,
+    target: 'editor' | 'viewer',
+  ) => {
+    const video = event.currentTarget
+    const elapsedBeforeClip = videoClips.slice(0, clipIndex).reduce((total, item) => {
+      const clipEnd = item.trimEnd > item.trimStart ? item.trimEnd : item.duration
+      return total + Math.max(0, clipEnd - item.trimStart)
+    }, 0)
+    setCurrentVideoTime(elapsedBeforeClip + Math.max(0, video.currentTime - (clip?.trimStart ?? 0)))
+    if (!clip || clip.trimEnd <= clip.trimStart || video.currentTime < clip.trimEnd) return
+
+    if (clipIndex < videoClips.length - 1) {
+      video.pause()
+      if (target === 'editor') {
+        resumeEditorClipRef.current = true
+        setEditorClipIndex(clipIndex + 1)
+      } else {
+        resumeViewerClipRef.current = true
+        setViewerClipIndex(clipIndex + 1)
+      }
+      return
+    }
+
+    video.pause()
+    video.currentTime = clip.trimEnd
+  }
+
+  const updateManual = (patch: Partial<Manual>) => {
+    setManuals((current) =>
+      current.map((manual) =>
+        manual.id === selectedManual.id
+          ? { ...manual, ...patch, updatedAt: new Date().toISOString().slice(0, 10) }
+          : manual,
+      ),
+    )
+  }
+
+  const updateDecisionNode = (nodeId: string, patch: Partial<DecisionNode>) => {
+    updateManual({
+      decisionNodes: decisionNodes.map((node) => (node.id === nodeId ? { ...node, ...patch } : node)),
+    })
+  }
+
+  const addDecisionNode = (
+    type: DecisionNodeType,
+    link?: { nodeId: string; field: 'yesNodeId' | 'noNodeId' | 'nextNodeId' },
+  ) => {
+    const id = `decision-${Date.now()}`
+    const nextNode: DecisionNode = {
+      id,
+      type,
+      title: type === 'question' ? '確認する項目' : type === 'action' ? '実施する処置' : '処置を完了',
+      detail: type === 'question' ? '現場で判断する条件を入力します。' : '現場で実施する内容を入力します。',
+    }
+    updateManual({
+      decisionNodes: decisionNodes.map((node) =>
+        link && node.id === link.nodeId ? { ...node, [link.field]: id } : node,
+      ).concat(nextNode),
+    })
+    setSelectedDecisionNodeId(id)
+  }
+
+  const removeDecisionNode = (nodeId: string) => {
+    if (decisionNodes.length <= 1) {
+      setFirebaseMessage('処置フローには少なくとも1つのノードが必要です')
+      return
+    }
+    const remainingNodes = decisionNodes
+      .filter((node) => node.id !== nodeId)
+      .map((node) => ({
+        ...node,
+        yesNodeId: node.yesNodeId === nodeId ? undefined : node.yesNodeId,
+        noNodeId: node.noNodeId === nodeId ? undefined : node.noNodeId,
+        nextNodeId: node.nextNodeId === nodeId ? undefined : node.nextNodeId,
+      }))
+    updateManual({
+      decisionNodes: remainingNodes,
+      decisionStartNodeId:
+        selectedManual.decisionStartNodeId === nodeId ? remainingNodes[0]?.id : selectedManual.decisionStartNodeId,
+    })
+    if (decisionNodeId === nodeId) {
+      setDecisionNodeId(remainingNodes[0]?.id ?? null)
+      setDecisionPath(remainingNodes[0] ? [remainingNodes[0].id] : [])
+    }
+    if (selectedDecisionNodeId === nodeId) {
+      setSelectedDecisionNodeId(remainingNodes[0]?.id ?? null)
+    }
+  }
+
+  const resetDecisionReview = () => {
+    setDecisionNodeId(decisionStartNodeId)
+    setDecisionPath(decisionStartNodeId ? [decisionStartNodeId] : [])
+  }
+
+  const advanceDecision = (nextNodeId?: string) => {
+    if (!nextNodeId || !decisionNodeMap.has(nextNodeId)) {
+      setFirebaseMessage('次に進む分岐先を設定してください')
+      return
+    }
+    setDecisionNodeId(nextNodeId)
+    setDecisionPath((current) => [...current, nextNodeId])
+  }
+
+  const copyManualQrLink = async () => {
+    try {
+      await navigator.clipboard.writeText(manualQrUrl)
+      setFirebaseMessage('現場掲示用のQRリンクをコピーしました')
+    } catch {
+      setFirebaseMessage('リンクをコピーできませんでした。QRコードを読み取って利用してください')
+    }
+  }
+
+  const persistSelectedManual = async () => {
+    const latest = manuals.find((manual) => manual.id === selectedManual.id)
+    if (!latest) return
+
+    try {
+      await saveManual(latest)
+      setFirebaseMessage(`Firebase保存完了: ${latest.id}`)
+    } catch (error) {
+      setFirebaseMessage(error instanceof Error ? error.message : 'Firebase保存に失敗しました')
+    }
+  }
+
+  const handleVideoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!file.type.startsWith('video/')) {
+      setFirebaseMessage('動画ファイルを選択してください')
+      return
+    }
+
+    setIsUploading(true)
+    setFirebaseMessage(`動画アップロード中: ${file.name}`)
+
+    try {
+      const [thumbnail, videoUrl, duration] = await Promise.all([
+        captureVideoFileThumbnail(file),
+        uploadManualVideo(selectedManual.id, file),
+        getVideoDuration(file),
+      ])
+      const clip: VideoClip = {
+        id: `clip-${Date.now()}`,
+        name: file.name,
+        url: videoUrl,
+        duration,
+        trimStart: 0,
+        trimEnd: duration,
+      }
+      const updatedManual = {
+        ...selectedManual,
+        thumbnail,
+        videoUrl,
+        videoClips: [clip],
+        duration: formatVideoTime(duration),
+        updatedAt: new Date().toISOString().slice(0, 10),
+      }
+      setManuals((current) =>
+        current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)),
+      )
+      await saveManual(updatedManual)
+      setFirebaseMessage(`動画アップロード完了: ${file.name}`)
+    } catch (error) {
+      setFirebaseMessage(
+        error instanceof Error
+          ? `動画アップロード失敗: ${error.message}`
+          : '動画アップロードに失敗しました',
+      )
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleClipUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith('video/'))
+    event.target.value = ''
+    if (files.length === 0) {
+      setFirebaseMessage('動画ファイルを選択してください')
+      return
+    }
+
+    setIsUploading(true)
+    setFirebaseMessage(`${files.length}本の動画をアップロード中`)
+
+    try {
+      const uploadedClips = await Promise.all(
+        files.map(async (file, index): Promise<VideoClip> => {
+          const [url, duration] = await Promise.all([
+            uploadManualVideo(selectedManual.id, file),
+            getVideoDuration(file),
+          ])
           return {
             id: `clip-${Date.now()}-${index}`,
             name: file.name,
@@ -1202,134 +1564,7 @@ function App() {
       return
     }
     if (flashCards.length === 0) {
-      setFirebaseMessage('フラッシュテストには、手順ごとにOK写真またはNG例写真を登録してください')
-      return
-    }
-    const queue = shuffleCards(flashCards)
-    setFlashScore(0)
-    setFlashTotal(0)
-    setFlashCard(queue[0] ?? null)
-    setFlashQueue(queue.slice(1))
-  }
-
-  const answerFlashTest = (answer: FlashAnswer) => {
-    if (!flashCard) return
-    const correct = answer === flashCard.image.kind
-    setFlashTotal((current) => current + 1)
-    if (correct) {
-      setFlashScore((current) => current + 1)
-    }
-    const nextCard = flashQueue[0] ?? null
-    setFlashQueue((current) => current.slice(1))
-    setFlashCard(nextCard)
-    if (!nextCard) {
-      setFirebaseMessage('今回の出題を完了しました。すべてのNG写真を1回以上出題しています')
-    }
-
-    void recordFlashTestResult({
-      manualId: selectedManual.id,
-      worker: flashWorker.trim(),
-      imageId: flashCard.image.id,
-      imageName: flashCard.image.name,
-      imageKind: flashCard.image.kind as FlashAnswer,
-      stepId: flashCard.step.id,
-      stepTitle: flashCard.step.title,
-      answer,
-      correct,
-      answeredAt: new Date().toISOString(),
-    }).catch((error) =>
-      setFirebaseMessage(error instanceof Error ? error.message : 'フラッシュテスト結果の保存に失敗しました'),
-    )
-  }
-
-  const seekViewerStep = async (step: Step) => {
-    const video = viewerVideoRef.current
-    if (!video || !viewerClip) {
-      setCurrentVideoTime(parseStepTime(step.time))
-      viewerStepsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      return
-    }
-
-    const seconds = parseStepTime(step.time)
-    setCurrentVideoTime(seconds)
-    const position = getComposedPosition(seconds)
-    if (position.index !== viewerClipIndex) {
-      pendingViewerSeekRef.current = position.time
-      resumeViewerClipRef.current = true
-      setViewerClipIndex(position.index)
-      return
-    }
-    video.currentTime = position.time
-    video.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    try {
-      await video.play()
-    } catch {
-      setFirebaseMessage('動画の再生ボタンを押して開始してください')
-    }
-  }
-
-  const createManual = () => {
-    const id = `M-${Math.floor(1000 + Math.random() * 8999)}`
-    const manual: Manual = {
-      id,
-      title: '新規動画マニュアル',
-      workName: '新規検査作業',
-      controlNo: `INS-${new Date().getFullYear()}-${id.replace('M-', '')}`,
-      productName: '品名未設定',
-      department: '未設定',
-      owner: '作成者',
-      status: 'draft',
-      version: 'v0.1',
-      duration: '00:00',
-      updatedAt: new Date().toISOString().slice(0, 10),
-      videoUrl: '',
-      thumbnail:
-        'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
-      tags: ['未分類'],
-      kind: 'standard',
-      reviewers: ['承認者を追加'],
-      checks: [{ id: 'content', label: '動画と手順の整合性を確認', checked: false }],
-      approvalHistory: [
-        { id: `created-${id}`, action: 'created', actor: '作成者', createdAt: new Date().toISOString() },
-      ],
-      inspectionImages: [],
-      steps: [
-        {
-          id: 1,
-          time: '00:00',
-          title: '手順タイトル',
-          detail: '現場で迷わないように、短い文章で入力します。',
-        },
-      ],
-    }
-    void saveWorkflowManual(manual, '新規マニュアルをFirebaseへ保存しました')
-    setSelectedId(id)
-    setView('edit')
-  }
-
-  const createAbnormalManual = () => {
-    const id = `A-${Math.floor(1000 + Math.random() * 8999)}`
-    const decisionNodes = createDefaultDecisionNodes()
-    const manual: Manual = {
-      id,
-      title: '新規異常処置マニュアル',
-      workName: '異常処置',
-      controlNo: `ABN-${new Date().getFullYear()}-${id.replace('A-', '')}`,
-      productName: '対象品を入力',
-      department: '未設定',
-      owner: '作成者',
-      status: 'draft',
-      version: 'v0.1',
-      duration: '分岐型',
-      updatedAt: new Date().toISOString().slice(0, 10),
-      videoUrl: '',
-      thumbnail:
-        'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1200&q=80',
-      tags: ['異常対応', '処置フロー'],
-      kind: 'abnormal',
-      decisionNodes,
-      decisionStartNodeId: decisionNodes[0].id,
-      reviewers: ['承認者を追加'],
+      setFiers: ['承認者を追加'],
       checks: [{ id: 'flow', label: 'YES／NOの分岐と処置内容を確認', checked: false }],
       approvalHistory: [
         { id: `created-${id}`, action: 'created', actor: '作成者', createdAt: new Date().toISOString() },
@@ -2405,7 +2640,151 @@ function App() {
                     <strong>{selectedManual.steps.flatMap((step) => step.inspectionImages ?? []).length}</strong>
                     判定資料
                   </span>
-                </d        </div>
+                </div>
+              </section>
+              <section className="manual-qr-panel" id="manual-qr-panel">
+                <div className="manual-qr-copy">
+                  <p className="eyebrow">現場掲示用</p>
+                  <h2>この作業のQRコード</h2>
+                  <p>
+                    現場で読み取ると、このマニュアルの閲覧画面を直接開きます。
+                  </p>
+                  {!isPublished && <span className="qr-draft-note">公開前のマニュアルです</span>}
+                </div>
+                <QRCodeSVG
+                  aria-label={`${selectedManual.title}を開くQRコード`}
+                  bgColor="#ffffff"
+                  className="manual-qr-code"
+                  fgColor="#17202f"
+                  level="M"
+                  marginSize={2}
+                  size={164}
+                  value={manualQrUrl}
+                />
+                <div className="manual-qr-actions">
+                  <button type="button" onClick={copyManualQrLink}>
+                    <Copy size={16} aria-hidden="true" />
+                    リンクをコピー
+                  </button>
+                  <button type="button" onClick={() => window.print()}>
+                    <Printer size={16} aria-hidden="true" />
+                    QRコードを印刷
+                  </button>
+                </div>
+                <small>整理No: {selectedManual.controlNo ?? '未設定'}</small>
+              </section>
+            </aside>
+          </div>
+        )}
+
+        {view === 'decision' && isAbnormalManual && (
+          <div className="decision-review-view">
+            <aside className="decision-review-tree">
+              <header className="decision-section-header">
+                <div>
+                  <p className="eyebrow">レビュー用ツリー</p>
+                  <h2>異常処置の全体像</h2>
+                </div>
+                <button type="button" onClick={resetDecisionReview}>
+                  <RotateCcw size={16} aria-hidden="true" />
+                  最初から
+                </button>
+              </header>
+              <ol className="decision-review-list">
+                {decisionNodes.map((node) => (
+                  <li
+                    className={`${decisionPath.includes(node.id) ? 'visited' : ''} ${activeDecisionNode?.id === node.id ? 'current' : ''}`}
+                    key={node.id}
+                  >
+                    <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
+                    <div>
+                      <strong>{node.title || '名称未設定'}</strong>
+                      <small>{node.detail || '説明を入力してください'}</small>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </aside>
+
+            <section className="decision-runner" aria-live="polite">
+              {activeDecisionNode ? (
+                <>
+                  <div className="decision-runner-progress">
+                    <span>処置確認</span>
+                    <span>{decisionPath.length} / {decisionNodes.length}</span>
+                  </div>
+                  <span className={`decision-type large ${activeDecisionNode.type}`}>
+                    {decisionNodeTypeLabels[activeDecisionNode.type]}
+                  </span>
+                  <h2>{activeDecisionNode.title || '名称未設定'}</h2>
+                  <p>{activeDecisionNode.detail || '現場への指示を入力してください。'}</p>
+                  {activeDecisionNode.type === 'question' && (
+                    <div className="decision-answer-actions">
+                      <button className="decision-answer yes" type="button" onClick={() => advanceDecision(activeDecisionNode.yesNodeId)}>
+                        YES
+                      </button>
+                      <button className="decision-answer no" type="button" onClick={() => advanceDecision(activeDecisionNode.noNodeId)}>
+                        NO
+                      </button>
+                    </div>
+                  )}
+                  {activeDecisionNode.type === 'action' && (
+                    <button className="decision-next-action" type="button" onClick={() => advanceDecision(activeDecisionNode.nextNodeId)}>
+                      処置を実施した。次へ進む
+                    </button>
+                  )}
+                  {activeDecisionNode.type === 'end' && (
+                    <div className="decision-complete-state">
+                      <CheckCircle2 size={30} aria-hidden="true" />
+                      <strong>処置フローを完了しました</strong>
+                      <button type="button" onClick={resetDecisionReview}>
+                        最初から確認する
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="decision-empty-state">
+                  <GitBranch size={34} aria-hidden="true" />
+                  <h2>処置フローがありません</h2>
+                  <p>作成画面で判断または処置を追加してください。</p>
+                  <button type="button" onClick={() => setView('edit')}>作成画面へ</button>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {view === 'flash' && (
+          <div className="flash-test-view">
+            <aside className="flash-test-summary">
+              <div>
+                <p className="eyebrow">検査判定トレーニング</p>
+                <h2>フラッシュテスト</h2>
+              </div>
+              <label className="flash-worker-field">
+                作業者
+                <input
+                  value={flashWorker}
+                  onChange={(event) => setFlashWorker(event.target.value)}
+                  placeholder="作業者名を入力"
+                  disabled={Boolean(flashCard)}
+                />
+              </label>
+              <div className="flash-score">
+                <span>
+                  <strong>{flashScore}</strong>
+                  正解
+                </span>
+                <span>
+                  <strong>{flashTotal}</strong>
+                  回答
+                </span>
+                <span>
+                  <strong>{ngFlashCardCount}</strong>
+                  NG写真
+                </span>
+              </div>
               <button type="button" onClick={startFlashTest} disabled={flashCards.length === 0}>
                 <Sparkles size={18} aria-hidden="true" />
                 新しい出題を開始
