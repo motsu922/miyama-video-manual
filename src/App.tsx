@@ -600,6 +600,7 @@ function App() {
   const selectedManual = manuals.find((manual) => manual.id === selectedId) ?? manuals[0] ?? initialManuals[0]
   const selectedManualRef = useRef(selectedManual)
   selectedManualRef.current = selectedManual
+  const isQrViewer = Boolean(qrManualId && hasOpenedQrManual)
   const isPublished = selectedManual.status === 'published'
   const isEditingLocked = selectedManual.status !== 'draft'
   const isAbnormalManual = selectedManual.kind === 'abnormal'
@@ -1976,7 +1977,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''}`}>
       <aside className="sidebar" aria-label="動画マニュアル一覧">
         <div className="brand">
           <img src={miyamaLogo} alt="MIYAMA" />
@@ -3134,6 +3135,41 @@ function App() {
                         <img src={image.url} alt={image.name} />
                         <figcaption>{image.name}</figcaption>
                       </figure>
+                    ))}
+                  </div>
+                </section>
+              )}
+              {isQrViewer && (
+                <section className="qr-simple-steps">
+                  <header className="section-heading compact-heading">
+                    <div>
+                      <p className="eyebrow">作業手順</p>
+                      <h2>手順を確認</h2>
+                    </div>
+                    <span>{selectedManual.steps.length} 手順</span>
+                  </header>
+                  <div className="viewer-steps">
+                    {selectedManual.steps.map((step, index) => (
+                      <section
+                        className={activeStep?.id === step.id ? 'active-viewer-step' : ''}
+                        key={step.id}
+                      >
+                        <button type="button" onClick={() => seekViewerStep(step)}>
+                          <span>{String(index + 1).padStart(2, '0')}</span>
+                          <span>{step.time}</span>
+                          <strong>{translatedSteps.get(step.id)?.title ?? step.title}</strong>
+                        </button>
+                        <p>{translatedSteps.get(step.id)?.detail ?? step.detail}</p>
+                        <div className="inspection-gallery viewer-gallery">
+                          {(step.inspectionImages ?? []).map((image) => (
+                            <article className={`inspection-image ${image.kind}`} key={image.id}>
+                              <img src={image.url} alt={image.name} />
+                              <span>{imageKindLabels[image.kind]}</span>
+                              <strong>{image.name}</strong>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
                     ))}
                   </div>
                 </section>
