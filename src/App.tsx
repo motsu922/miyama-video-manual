@@ -329,6 +329,89 @@ function formatVideoTime(seconds: number) {
   return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
 }
 
+type DecisionFlowLayoutNode = {
+  node: DecisionNode
+  x: number
+  y: number
+}
+
+function getDecisionTargets(node: DecisionNode) {
+  if (node.type === 'question') {
+    return [
+      { id: node.yesNodeId, label: 'YES' },
+      { id: node.noNodeId, label: 'NO' },
+    ]
+  }
+  if (node.type === 'action') return [{ id: node.nextNodeId, label: '次へ' }]
+  return []
+}
+
+function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | null) {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  const firstNodeId = startNodeId ?? nodes[0]?.id
+  const depthById = new Map<string, number>()
+  const queue = firstNodeId && nodeById.has(firstNodeId) ? [firstNodeId] : []
+  if (firstNodeId && nodeById.has(firstNodeId)) depthById.set(firstNodeId, 0)
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const node = nodeById.get(queue[index])
+    if (!node) continue
+    const depth = depthById.get(node.id) ?? 0
+    getDecisionTargets(node).forEach((target) => {
+      if (!target.id || !nodeById.has(target.id) || depthById.has(target.id)) return
+      depthById.set(target.id, depth + 1)
+      queue.push(target.id)
+    })
+  }
+
+  let fallbackDepth = Math.max(0, ...depthById.values()) + 1
+  nodes.forEach((node) => {
+    if (depthById.has(node.id)) return
+    depthById.set(node.id, fallbackDepth)
+    fallbackDepth += 1
+  })
+
+  const layers = new Map<number, DecisionNode[]>()
+  nodes.forEach((node) => {
+    const depth = depthById.get(node.id) ?? 0
+    layers.set(depth, [...(layers.get(depth) ?? []), node])
+  })
+  const nodeWidth = 196
+  const nodeHeight = 80
+  const columnGap = 96
+  const rowGap = 36
+  const maxDepth = Math.max(0, ...layers.keys())
+  const maxLayerSize = Math.max(1, ...[...layers.values()].map((layer) => layer.length))
+  const width = Math.max(720, 80 + (maxDepth + 1) * (nodeWidth + columnGap))
+  const height = Math.max(240, 60 + maxLayerSize * (nodeHeight + rowGap))
+  const layoutNodes: DecisionFlowLayoutNode[] = []
+
+  ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([depth, layer]) => {
+    layer.forEach((node, index) => {
+      layoutNodes.push({
+        node,
+        x: 38 + depth * (nodeWidth + columnGap),
+        y: 30 + index * (nodeHeight + rowGap),
+      })
+    })
+  })
+
+  const layoutById = new Map(layoutNodes.map((item) => [item.node.id, item]))
+  const edges = layoutNodes.flatMap((from) =>
+    getDecisionTargets(from.node).flatMap((target) => {
+      const to = target.id ? layoutById.get(target.id) : undefined
+      return to ? [{ from, to, label: target.label }] : []
+    }),
+  )
+
+  return { edges, height, nodeHeight, nodeWidth, nodes: layoutNodes, width }
+}
+
+function splitDecisionFlowLabel(title: string) {
+  const label = title.trim() || '名称未設定'
+  return label.length > 18 ? [label.slice(0, 18), `${label.slice(18, 34)}...`] : [label]
+}
+
 function getVideoDuration(file: File) {
   return new Promise<number>((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file)
@@ -512,6 +595,10 @@ function App() {
   const decisionStartNodeId = selectedManual.decisionStartNodeId ?? decisionNodes[0]?.id ?? null
   const activeDecisionNode = decisionNodeMap.get(decisionNodeId ?? decisionStartNodeId ?? '')
   const editingDecisionNode = decisionNodeMap.get(selectedDecisionNodeId ?? decisionStartNodeId ?? '')
+  const decisionFlowChart = useMemo(
+    () => buildDecisionFlowChart(decisionNodes, decisionStartNodeId),
+    [decisionNodes, decisionStartNodeId],
+  )
   const manualQrUrl = useMemo(() => {
     const url = new URL(window.location.href)
     url.search = ''
@@ -2445,6 +2532,71 @@ function App() {
                     </button>
                   </div>
                 </header>
+                <section className="decision-flowchart" aria-label="処置フロー図">
+                  <div className="decision-flowchart-heading">
+                    <p className="eyebrow">フローチャート</p>
+                    <span>{decisionNodes.length} ノード</span>
+                  </div>
+                  <div className="decision-flowchart-scroll">
+                    <svg
+                      aria-label="判断と処置のフローチャート"
+                      height={decisionFlowChart.height}
+                      role="img"
+                      viewBox={`0 0 ${decisionFlowChart.width} ${decisionFlowChart.height}`}
+                      width={decisionFlowChart.width}
+                    >
+                      <defs>
+                        <marker id="decision-flow-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+                          <path d="M 0 0 L 8 4 L 0 8 z" />
+                        </marker>
+                      </defs>
+                      {decisionFlowChart.edges.map((edge) => {
+                        const startX = edge.from.x + decisionFlowChart.nodeWidth
+                        const startY = edge.from.y + decisionFlowChart.nodeHeight / 2
+                        const endX = edge.to.x
+                        const endY = edge.to.y + decisionFlowChart.nodeHeight / 2
+                        const bend = Math.max(34, Math.abs(endX - startX) * 0.48)
+                        return (
+                          <g className={`decision-flow-edge ${edge.label.toLowerCase()}`} key={`${edge.from.node.id}-${edge.label}-${edge.to.node.id}`}>
+                            <path d={`M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`} markerEnd="url(#decision-flow-arrow)" />
+                            <text x={(startX + endX) / 2} y={(startY + endY) / 2 - 7}>{edge.label}</text>
+                          </g>
+                        )
+                      })}
+                      {decisionFlowChart.nodes.map((layoutNode) => {
+                        const isSelected = layoutNode.node.id === editingDecisionNode?.id
+                        const isStart = layoutNode.node.id === decisionStartNodeId
+                        const lines = splitDecisionFlowLabel(layoutNode.node.title)
+                        return (
+                          <g
+                            aria-label={`${decisionNodeTypeLabels[layoutNode.node.type]}: ${layoutNode.node.title || '名称未設定'}`}
+                            className={`decision-flow-node ${layoutNode.node.type} ${isSelected ? 'selected' : ''} ${isStart ? 'start' : ''}`}
+                            key={layoutNode.node.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedDecisionNodeId(layoutNode.node.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                setSelectedDecisionNodeId(layoutNode.node.id)
+                              }
+                            }}
+                          >
+                            <rect height={decisionFlowChart.nodeHeight} rx="9" width={decisionFlowChart.nodeWidth} x={layoutNode.x} y={layoutNode.y} />
+                            <text className="decision-flow-kind" x={layoutNode.x + 13} y={layoutNode.y + 21}>
+                              {decisionNodeTypeLabels[layoutNode.node.type]}
+                            </text>
+                            {lines.map((line, index) => (
+                              <text className="decision-flow-title" key={line} x={layoutNode.x + 13} y={layoutNode.y + 46 + index * 18}>
+                                {line}
+                              </text>
+                            ))}
+                          </g>
+                        )
+                      })}
+                    </svg>
+                  </div>
+                </section>
                 <div className="decision-authoring-layout">
                   <ol className="decision-tree-list" aria-label="処置フローのツリー">
                     {decisionNodes.map((node, index) => (
