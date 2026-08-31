@@ -477,8 +477,10 @@ function App() {
   const [decisionNodeId, setDecisionNodeId] = useState<string | null>(null)
   const [decisionPath, setDecisionPath] = useState<string[]>([])
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
+  const [hasOpenedQrManual, setHasOpenedQrManual] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const viewerVideoRef = useRef<HTMLVideoElement | null>(null)
+  const viewerStepsRef = useRef<HTMLDivElement | null>(null)
   const resumeEditorClipRef = useRef(false)
   const resumeViewerClipRef = useRef(false)
   const pendingEditorSeekRef = useRef<number | null>(null)
@@ -611,10 +613,11 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!qrManualId || !manuals.some((manual) => manual.id === qrManualId)) return
+    if (hasOpenedQrManual || !qrManualId || !manuals.some((manual) => manual.id === qrManualId)) return
     setSelectedId(qrManualId)
     setView('library')
-  }, [manuals, qrManualId])
+    setHasOpenedQrManual(true)
+  }, [hasOpenedQrManual, manuals, qrManualId])
 
   useEffect(() => {
     setFlashCard(null)
@@ -1521,7 +1524,11 @@ function App() {
   }
 
   const startViewing = async () => {
-    if (!isPublished || !viewerClip) return
+    if (!isPublished) return
+    if (!viewerClip) {
+      viewerStepsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
     const video = viewerVideoRef.current
     if (!video) return
 
@@ -1586,7 +1593,8 @@ function App() {
   const seekViewerStep = async (step: Step) => {
     const video = viewerVideoRef.current
     if (!video || !viewerClip) {
-      setFirebaseMessage('動画を登録してから手順ジャンプを利用してください')
+      setCurrentVideoTime(parseStepTime(step.time))
+      viewerStepsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
       return
     }
 
@@ -2634,12 +2642,12 @@ function App() {
                   <button
                     type="button"
                     onClick={startViewing}
-                    disabled={!isPublished || !viewerClip}
+                    disabled={!isPublished}
                   >
                     <BookOpen size={18} aria-hidden="true" />
                     {viewerClip
                       ? isPublished ? '動画を視聴' : '公開前のため閲覧不可'
-                      : '動画未登録'}
+                      : isPublished ? '手順を確認' : '公開前のため閲覧不可'}
                   </button>
                   <div className="view-confirmation">
                     <input
@@ -2665,7 +2673,7 @@ function App() {
                 </div>
                 <span>{selectedManual.steps.length} 手順</span>
               </header>
-              <div className="viewer-steps">
+              <div className="viewer-steps" ref={viewerStepsRef}>
                 {selectedManual.steps.map((step, index) => (
                   <section
                     className={activeStep?.id === step.id ? 'active-viewer-step' : ''}
