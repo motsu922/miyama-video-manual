@@ -15,6 +15,7 @@ import {
   LockKeyhole,
   PlayCircle,
   Plus,
+  Printer,
   Save,
   Search,
   Send,
@@ -35,6 +36,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import './App.css'
 import miyamaLogo from './assets/miyama-logo.png'
 import { isFirebaseConfigured } from './firebase'
@@ -474,6 +476,7 @@ function App() {
   const [viewerClipIndex, setViewerClipIndex] = useState(0)
   const [decisionNodeId, setDecisionNodeId] = useState<string | null>(null)
   const [decisionPath, setDecisionPath] = useState<string[]>([])
+  const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const viewerVideoRef = useRef<HTMLVideoElement | null>(null)
   const resumeEditorClipRef = useRef(false)
@@ -503,6 +506,13 @@ function App() {
   )
   const decisionStartNodeId = selectedManual.decisionStartNodeId ?? decisionNodes[0]?.id ?? null
   const activeDecisionNode = decisionNodeMap.get(decisionNodeId ?? decisionStartNodeId ?? '')
+  const manualQrUrl = useMemo(() => {
+    const url = new URL(window.location.href)
+    url.search = ''
+    url.hash = ''
+    url.searchParams.set('manual', selectedManual.id)
+    return url.toString()
+  }, [selectedManual.id])
   const videoClips = useMemo<VideoClip[]>(() => {
     if (selectedManual.videoClips?.length) return selectedManual.videoClips
     if (!selectedManual.videoUrl) return []
@@ -599,6 +609,12 @@ function App() {
 
     return unsubscribe
   }, [])
+
+  useEffect(() => {
+    if (!qrManualId || !manuals.some((manual) => manual.id === qrManualId)) return
+    setSelectedId(qrManualId)
+    setView('library')
+  }, [manuals, qrManualId])
 
   useEffect(() => {
     setFlashCard(null)
@@ -809,6 +825,15 @@ function App() {
     }
     setDecisionNodeId(nextNodeId)
     setDecisionPath((current) => [...current, nextNodeId])
+  }
+
+  const copyManualQrLink = async () => {
+    try {
+      await navigator.clipboard.writeText(manualQrUrl)
+      setFirebaseMessage('現場掲示用のQRリンクをコピーしました')
+    } catch {
+      setFirebaseMessage('リンクをコピーできませんでした。QRコードを読み取って利用してください')
+    }
   }
 
   const persistSelectedManual = async () => {
@@ -2684,6 +2709,37 @@ function App() {
                     判定資料
                   </span>
                 </div>
+              </section>
+              <section className="manual-qr-panel" id="manual-qr-panel">
+                <div className="manual-qr-copy">
+                  <p className="eyebrow">現場掲示用</p>
+                  <h2>この作業のQRコード</h2>
+                  <p>
+                    現場で読み取ると、このマニュアルの閲覧画面を直接開きます。
+                  </p>
+                  {!isPublished && <span className="qr-draft-note">公開前のマニュアルです</span>}
+                </div>
+                <QRCodeSVG
+                  aria-label={`${selectedManual.title}を開くQRコード`}
+                  bgColor="#ffffff"
+                  className="manual-qr-code"
+                  fgColor="#17202f"
+                  level="M"
+                  marginSize={2}
+                  size={164}
+                  value={manualQrUrl}
+                />
+                <div className="manual-qr-actions">
+                  <button type="button" onClick={copyManualQrLink}>
+                    <Copy size={16} aria-hidden="true" />
+                    リンクをコピー
+                  </button>
+                  <button type="button" onClick={() => window.print()}>
+                    <Printer size={16} aria-hidden="true" />
+                    QRコードを印刷
+                  </button>
+                </div>
+                <small>整理No: {selectedManual.controlNo ?? '未設定'}</small>
               </section>
             </aside>
           </div>
