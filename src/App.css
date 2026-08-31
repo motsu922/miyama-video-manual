@@ -455,6 +455,69 @@ h2 {
   gap: 14px;
 }
 
+.manual-image-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e1e8f2;
+}
+
+.manual-image-panel .section-heading span,
+.viewer-manual-images .section-heading > span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.manual-image-gallery,
+.viewer-manual-image-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.manual-image-gallery article {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.manual-image-gallery img,
+.viewer-manual-image-gallery img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: block;
+  object-fit: cover;
+}
+
+.manual-image-gallery strong {
+  display: block;
+  padding: 8px 40px 8px 9px;
+  overflow: hidden;
+  color: #17202f;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manual-image-gallery button {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff;
+  color: #b91c1c;
+}
+
 .clip-editor {
   display: grid;
   gap: 10px;
@@ -1704,6 +1767,43 @@ textarea {
   display: grid;
   align-content: start;
   gap: 14px;
+}
+
+.viewer-manual-images {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e1e8f2;
+}
+
+.viewer-manual-images .section-heading {
+  margin-top: 0;
+}
+
+.viewer-manual-images .eyebrow {
+  margin-bottom: 3px;
+}
+
+.viewer-manual-image-gallery {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.viewer-manual-image-gallery figure {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.viewer-manual-image-gallery figcaption {
+  padding: 9px;
+  overflow: hidden;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .view-confirmation {
