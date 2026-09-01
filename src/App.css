@@ -3173,6 +3173,56 @@ textarea {
     box-shadow: none;
   }
 
+  #decision-flowchart-print,
+  #decision-flowchart-print * {
+    visibility: visible;
+  }
+
+  #decision-flowchart-print {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  #decision-flowchart-print .print-flowchart-button,
+  #decision-flowchart-print .decision-flowchart-tools .decision-flow-tool-group,
+  #decision-flowchart-print .decision-flowchart-tools > span {
+    display: none;
+  }
+
+  #decision-flowchart-print .decision-flowchart-heading {
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  #decision-flowchart-print .decision-flowchart-heading::after {
+    display: block;
+    margin-top: 4px;
+    color: #17202f;
+    content: '異常処置フローチャート';
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  #decision-flowchart-print .decision-flowchart-scroll {
+    overflow: visible;
+    border: 1px solid #cbd5e1;
+  }
+
+  #decision-flowchart-print .decision-flowchart-scroll > svg {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+  }
+
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+
   .manual-qr-actions,
   .qr-draft-note {
     display: none;
