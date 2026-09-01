@@ -64,6 +64,15 @@
   color: #a7b0c0;
 }
 
+.manual-item em {
+  display: block;
+  margin-top: 3px;
+  color: #fdba74;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 button,
 input,
 textarea {
@@ -454,6 +463,32 @@ h2 {
 .viewer-body button {
   color: #fff;
   background: #2563eb;
+}
+
+.upload-row .save-button.needs-save {
+  background: #1d4ed8;
+  box-shadow: 0 0 0 3px #bfdbfe;
+}
+
+.save-state {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.save-state.saved {
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.save-state.unsaved {
+  color: #9a3412;
+  background: #fff7ed;
 }
 
 .upload-control {
