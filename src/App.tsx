@@ -3479,30 +3479,38 @@ function App() {
                   </div>
                   {editingDecisionNode && (
                     <section className="decision-flow-quick-editor" aria-label="選択カードを編集">
-                      <select
-                        aria-label="カードの種別"
-                        disabled={isEditingLocked}
-                        value={editingDecisionNode.type}
-                        onChange={(event) => updateDecisionNode(editingDecisionNode.id, { type: event.target.value as DecisionNodeType })}
-                      >
-                        <option value="question">判断</option>
-                        <option value="action">処置</option>
-                        <option value="end">完了</option>
-                      </select>
-                      <input
-                        aria-label="カード名"
-                        disabled={isEditingLocked}
-                        placeholder="判断・処置の名称"
-                        value={editingDecisionNode.title}
-                        onChange={(event) => updateDecisionNode(editingDecisionNode.id, { title: event.target.value })}
-                      />
-                      <textarea
-                        aria-label="現場への指示"
-                        disabled={isEditingLocked}
-                        placeholder="現場への指示"
-                        value={editingDecisionNode.detail}
-                        onChange={(event) => updateDecisionNode(editingDecisionNode.id, { detail: event.target.value })}
-                      />
+                      <div className="decision-flow-quick-fields">
+                        <label>
+                          <span>種別</span>
+                          <select
+                            disabled={isEditingLocked}
+                            value={editingDecisionNode.type}
+                            onChange={(event) => updateDecisionNode(editingDecisionNode.id, { type: event.target.value as DecisionNodeType })}
+                          >
+                            <option value="question">判断</option>
+                            <option value="action">処置</option>
+                            <option value="end">完了</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>表示内容</span>
+                          <input
+                            disabled={isEditingLocked}
+                            placeholder="判断・処置の名称"
+                            value={editingDecisionNode.title}
+                            onChange={(event) => updateDecisionNode(editingDecisionNode.id, { title: event.target.value })}
+                          />
+                        </label>
+                        <label className="wide-field">
+                          <span>現場への指示</span>
+                          <textarea
+                            disabled={isEditingLocked}
+                            placeholder="現場への指示"
+                            value={editingDecisionNode.detail}
+                            onChange={(event) => updateDecisionNode(editingDecisionNode.id, { detail: event.target.value })}
+                          />
+                        </label>
+                      </div>
                       <div className="decision-flow-quick-actions">
                         <button
                           className={editingDecisionNode.id === decisionStartNodeId ? 'active' : ''}
