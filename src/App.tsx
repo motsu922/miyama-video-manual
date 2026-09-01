@@ -3090,58 +3090,47 @@ function App() {
                     <p className="eyebrow">フローチャート</p>
                     <div className="decision-flowchart-tools">
                       <span>{decisionNodes.length} ノード</span>
-                      <button
-                        aria-label="カードを選択・移動"
-                        className={flowTool === 'select' ? 'active' : ''}
-                        title="カードを選択・移動"
-                        type="button"
-                        onClick={() => {
-                          setFlowTool('select')
-                          setConnectingFromNodeId(null)
-                        }}
-                      >
-                        <MousePointer2 size={16} aria-hidden="true" />
-                      </button>
-                      <button
-                        aria-label="カードを接続"
-                        className={flowTool === 'connect' ? 'active' : ''}
-                        disabled={isEditingLocked}
-                        title="カードを接続"
-                        type="button"
-                        onClick={() => {
-                          setFlowTool('connect')
-                          setConnectingFromNodeId(null)
-                        }}
-                      >
-                        <Link2 size={16} aria-hidden="true" />
-                      </button>
-                      <button
-                        aria-label="判断カードを追加"
-                        disabled={isEditingLocked}
-                        title="判断カードを追加"
-                        type="button"
-                        onClick={() => addDecisionNode('question')}
-                      >
-                        <GitBranch size={16} aria-hidden="true" />
-                      </button>
-                      <button
-                        aria-label="処置カードを追加"
-                        disabled={isEditingLocked}
-                        title="処置カードを追加"
-                        type="button"
-                        onClick={() => addDecisionNode('action')}
-                      >
-                        <Plus size={16} aria-hidden="true" />
-                      </button>
-                      <button
-                        aria-label="完了カードを追加"
-                        disabled={isEditingLocked}
-                        title="完了カードを追加"
-                        type="button"
-                        onClick={() => addDecisionNode('end')}
-                      >
-                        <CheckCircle2 size={16} aria-hidden="true" />
-                      </button>
+                      <div className="decision-flow-tool-group">
+                        <button
+                          className={flowTool === 'select' ? 'active' : ''}
+                          title="カードをドラッグして移動"
+                          type="button"
+                          onClick={() => {
+                            setFlowTool('select')
+                            setConnectingFromNodeId(null)
+                          }}
+                        >
+                          <MousePointer2 size={16} aria-hidden="true" />
+                          移動
+                        </button>
+                        <button
+                          className={flowTool === 'connect' ? 'active' : ''}
+                          disabled={isEditingLocked}
+                          title="接続する2枚のカードを順に選択"
+                          type="button"
+                          onClick={() => {
+                            setFlowTool('connect')
+                            setConnectingFromNodeId(null)
+                          }}
+                        >
+                          <Link2 size={16} aria-hidden="true" />
+                          つなぐ
+                        </button>
+                      </div>
+                      <div className="decision-flow-tool-group add-cards">
+                        <button disabled={isEditingLocked} title="判断カードを追加" type="button" onClick={() => addDecisionNode('question')}>
+                          <GitBranch size={16} aria-hidden="true" />
+                          判断
+                        </button>
+                        <button disabled={isEditingLocked} title="処置カードを追加" type="button" onClick={() => addDecisionNode('action')}>
+                          <Plus size={16} aria-hidden="true" />
+                          処置
+                        </button>
+                        <button disabled={isEditingLocked} title="完了カードを追加" type="button" onClick={() => addDecisionNode('end')}>
+                          <CheckCircle2 size={16} aria-hidden="true" />
+                          完了
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="decision-flowchart-scroll">
