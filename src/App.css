@@ -1346,27 +1346,41 @@ textarea {
   cursor: pointer;
 }
 
+.decision-flow-edge:hover > path:not(.decision-flow-edge-hit) {
+  stroke: #2563eb;
+  stroke-width: 3.5;
+}
+
 .decision-flow-edge-hit {
   stroke: transparent !important;
   stroke-width: 18 !important;
   pointer-events: stroke;
 }
 
-.decision-flow-edge text {
+.decision-flow-edge-label rect {
+  fill: #fff;
+  stroke: #cbd5e1;
+  stroke-width: 1;
+}
+
+.decision-flow-edge-label text {
   fill: #475569;
   font-size: 12px;
   font-weight: 800;
-  paint-order: stroke;
-  stroke: #f8fbff;
-  stroke-width: 4px;
-  text-anchor: middle;
+  stroke: none;
+  text-anchor: start;
+}
+
+.decision-flow-edge:hover .decision-flow-edge-label rect {
+  fill: #eff6ff;
+  stroke: #2563eb;
 }
 
 .decision-flow-edge.yes path {
   stroke: #15803d;
 }
 
-.decision-flow-edge.yes text {
+.decision-flow-edge.yes .decision-flow-edge-label text {
   fill: #15803d;
 }
 
@@ -1374,7 +1388,7 @@ textarea {
   stroke: #b91c1c;
 }
 
-.decision-flow-edge.no text {
+.decision-flow-edge.no .decision-flow-edge-label text {
   fill: #b91c1c;
 }
 
