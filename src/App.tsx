@@ -658,6 +658,7 @@ function App() {
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
   const [hasOpenedQrManual, setHasOpenedQrManual] = useState(false)
+  const [dirtyManualIds, setDirtyManualIds] = useState<Set<string>>(new Set())
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const viewerVideoRef = useRef<HTMLVideoElement | null>(null)
   const viewerStepsRef = useRef<HTMLDivElement | null>(null)
@@ -688,6 +689,45 @@ function App() {
   const selectedManual = manuals.find((manual) => manual.id === selectedId) ?? manuals[0] ?? initialManuals[0]
   const selectedManualRef = useRef(selectedManual)
   selectedManualRef.current = selectedManual
+  const hasUnsavedChanges = dirtyManualIds.has(selectedManual.id)
+  const hasAnyUnsavedChanges = dirtyManualIds.size > 0
+
+  const markManualDirty = (manualId: string) => {
+    setDirtyManualIds((current) => {
+      if (current.has(manualId)) return current
+      return new Set(current).add(manualId)
+    })
+  }
+
+  const markManualSaved = (manualId: string) => {
+    setDirtyManualIds((current) => {
+      if (!current.has(manualId)) return current
+      const next = new Set(current)
+      next.delete(manualId)
+      return next
+    })
+  }
+
+  const selectManual = (manualId: string) => {
+    if (manualId === selectedManual.id) return
+    if (
+      hasUnsavedChanges &&
+      !window.confirm(`「${selectedManual.title || '名称未設定'}」に未保存の変更があります。保存せずに移動しますか？`)
+    ) {
+      return
+    }
+    setSelectedId(manualId)
+  }
+
+  useEffect(() => {
+    if (!hasAnyUnsavedChanges) return
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasAnyUnsavedChanges])
   const isQrViewer = Boolean(qrManualId && hasOpenedQrManual)
   const isPublished = selectedManual.status === 'published'
   const isEditingLocked = selectedManual.status !== 'draft'
@@ -997,6 +1037,7 @@ function App() {
   }
 
   const updateManual = (patch: Partial<Manual>) => {
+    markManualDirty(selectedManual.id)
     setManuals((current) =>
       current.map((manual) =>
         manual.id === selectedManual.id
@@ -1644,6 +1685,7 @@ function App() {
 
     try {
       await saveManual(latest)
+      markManualSaved(latest.id)
       setFirebaseMessage(`Firebase保存完了: ${latest.id}`)
     } catch (error) {
       setFirebaseMessage(error instanceof Error ? error.message : 'Firebase保存に失敗しました')
@@ -2165,6 +2207,7 @@ function App() {
     })
     try {
       await saveManual(manual)
+      markManualSaved(manual.id)
       setFirebaseMessage(message)
     } catch (error) {
       setFirebaseMessage(error instanceof Error ? error.message : 'ワークフローの保存に失敗しました')
@@ -2616,7 +2659,7 @@ function App() {
               className={`manual-item ${manual.id === selectedManual.id ? 'active' : ''}`}
               key={manual.id}
               type="button"
-              onClick={() => setSelectedId(manual.id)}
+              onClick={() => selectManual(manual.id)}
             >
               <img src={manual.thumbnail} alt="" />
               <span>
@@ -2624,6 +2667,7 @@ function App() {
                 <small>
                   {manual.department} / {statusLabels[manual.status]}
                 </small>
+                {dirtyManualIds.has(manual.id) && <em className="manual-unsaved">未保存</em>}
               </span>
             </button>
           ))}
@@ -2783,10 +2827,18 @@ function App() {
                   <FileVideo size={18} aria-hidden="true" />
                   現在フレームをサムネイル
                 </button>
-                <button disabled={isEditingLocked} type="button" onClick={persistSelectedManual}>
+                <button
+                  className={hasUnsavedChanges ? 'save-button needs-save' : 'save-button'}
+                  disabled={isEditingLocked}
+                  type="button"
+                  onClick={persistSelectedManual}
+                >
                   <Save size={18} aria-hidden="true" />
                   Firebaseへ保存
                 </button>
+                <span className={`save-state ${hasUnsavedChanges ? 'unsaved' : 'saved'}`} aria-live="polite">
+                  {hasUnsavedChanges ? '未保存の変更あり' : '保存済み'}
+                </span>
               </div>
               {(selectedManual.manualImages?.length ?? 0) > 0 && (
                 <section className="manual-image-panel">
@@ -4787,3 +4839,8 @@ function App() {
 }
 
 export default App
+MethodInvocationException: 
+Line |
+   2 |  … /App.tsx'); [Console]::Out.Write($s.Substring(198000,[Math]::Min(6000 …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception calling "Substring" with "2" argument(s): "startIndex cannot be larger than length of string. (Parameter 'startIndex')"
