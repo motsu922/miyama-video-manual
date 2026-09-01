@@ -1295,33 +1295,45 @@ function App() {
     setConnectingFromNodeId(null)
   }
 
+  const getFlowMenuPosition = (clientX: number, clientY: number, menuWidth = 190, menuHeight = 190) => {
+    const container = flowchartScrollRef.current
+    if (!container) return { x: clientX + 8, y: clientY + 8 }
+    const bounds = container.getBoundingClientRect()
+    const minX = container.scrollLeft + 8
+    const minY = container.scrollTop + 8
+    const maxX = Math.max(minX, container.scrollLeft + container.clientWidth - menuWidth - 8)
+    const maxY = Math.max(minY, container.scrollTop + container.clientHeight - menuHeight - 8)
+    return {
+      x: Math.min(maxX, Math.max(minX, clientX - bounds.left + container.scrollLeft + 8)),
+      y: Math.min(maxY, Math.max(minY, clientY - bounds.top + container.scrollTop + 8)),
+    }
+  }
+
   const openFlowContextMenu = (nodeId: string, event: ReactMouseEvent<SVGGElement>) => {
     event.preventDefault()
     event.stopPropagation()
     const svg = flowchartSvgRef.current
-    const container = svg?.parentElement
+    const container = flowchartScrollRef.current
     if (!svg || !container || isEditingLocked) return
-    const bounds = svg.getBoundingClientRect()
+    const position = getFlowMenuPosition(event.clientX, event.clientY)
     setFlowEdgeMenu(null)
     setSelectedDecisionNodeId(nodeId)
     setFlowContextMenu({
       nodeId,
-      x: event.clientX - bounds.left + container.scrollLeft,
-      y: event.clientY - bounds.top + container.scrollTop,
+      ...position,
     })
   }
 
   const openFlowCanvasContextMenu = (event: ReactMouseEvent<SVGSVGElement>) => {
     event.preventDefault()
     const svg = flowchartSvgRef.current
-    const container = svg?.parentElement
+    const container = flowchartScrollRef.current
     const point = getFlowPoint(event.clientX, event.clientY)
     if (!svg || !container || !point || isEditingLocked) return
-    const bounds = svg.getBoundingClientRect()
+    const position = getFlowMenuPosition(event.clientX, event.clientY)
     setFlowEdgeMenu(null)
     setFlowContextMenu({
-      x: event.clientX - bounds.left + container.scrollLeft,
-      y: event.clientY - bounds.top + container.scrollTop,
+      ...position,
       canvasX: point.x,
       canvasY: point.y,
     })
@@ -1330,17 +1342,16 @@ function App() {
   const openFlowEdgeMenu = (edge: DecisionFlowEdge, event: ReactMouseEvent<SVGGElement>) => {
     event.stopPropagation()
     const svg = flowchartSvgRef.current
-    const container = svg?.parentElement
+    const container = flowchartScrollRef.current
     if (!svg || !container || isEditingLocked) return
-    const bounds = svg.getBoundingClientRect()
+    const position = getFlowMenuPosition(event.clientX, event.clientY, 250, 220)
     setFlowContextMenu(null)
     setFlowEdgeMenu({
       sourceId: edge.from.node.id,
       targetId: edge.to.node.id,
       branchId: edge.branchId,
       connectionKind: edge.connectionKind,
-      x: event.clientX - bounds.left + container.scrollLeft,
-      y: event.clientY - bounds.top + container.scrollTop,
+      ...position,
     })
   }
 
