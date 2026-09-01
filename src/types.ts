@@ -90,12 +90,19 @@ export type DecisionNodeMedia = {
   uploadedAt: string
 }
 
+export type DecisionBranch = {
+  id: string
+  label: string
+  nextNodeId?: string
+}
+
 export type DecisionNode = {
   id: string
   type: DecisionNodeType
   title: string
   detail: string
   media?: DecisionNodeMedia[]
+  branches?: DecisionBranch[]
   yesNodeId?: string
   noNodeId?: string
   nextNodeId?: string
