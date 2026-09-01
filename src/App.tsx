@@ -3504,18 +3504,18 @@ function App() {
                         onChange={(event) => updateDecisionNode(editingDecisionNode.id, { detail: event.target.value })}
                       />
                       <div className="decision-flow-quick-actions">
-                        <label className="start-node-toggle">
-                          <input
-                            checked={editingDecisionNode.id === decisionStartNodeId}
-                            disabled={isEditingLocked}
-                            name="decision-start-quick"
-                            type="radio"
-                            onChange={() => updateManual({ decisionStartNodeId: editingDecisionNode.id })}
-                          />
-                          開始地点
-                        </label>
+                        <button
+                          className={editingDecisionNode.id === decisionStartNodeId ? 'active' : ''}
+                          disabled={isEditingLocked}
+                          type="button"
+                          onClick={() => updateManual({ decisionStartNodeId: editingDecisionNode.id })}
+                        >
+                          <PlayCircle size={16} aria-hidden="true" />
+                          {editingDecisionNode.id === decisionStartNodeId ? '開始地点' : '開始地点に設定'}
+                        </button>
                         <label className="decision-flow-quick-upload" title="資料を追加">
                           <UploadCloud size={16} aria-hidden="true" />
+                          資料追加
                           <input
                             accept="image/*,video/*"
                             disabled={isEditingLocked || isUploading}
@@ -3525,16 +3525,15 @@ function App() {
                           />
                         </label>
                         <button
-                          aria-label="カードを複製"
                           disabled={isEditingLocked}
                           title="カードを複製"
                           type="button"
                           onClick={() => duplicateDecisionNode(editingDecisionNode.id)}
                         >
                           <Copy size={16} aria-hidden="true" />
+                          複製
                         </button>
                         <button
-                          aria-label="カードを削除"
                           className="danger"
                           disabled={isEditingLocked}
                           title="カードを削除"
@@ -3542,6 +3541,7 @@ function App() {
                           onClick={() => removeDecisionNode(editingDecisionNode.id)}
                         >
                           <Trash2 size={16} aria-hidden="true" />
+                          削除
                         </button>
                       </div>
                     </section>
