@@ -1401,33 +1401,33 @@ textarea {
   cursor: grabbing;
 }
 
-.decision-flow-node rect {
+.decision-flow-node > rect {
   fill: #eff6ff;
   stroke: #60a5fa;
   stroke-width: 2;
 }
 
-.decision-flow-node.action rect {
+.decision-flow-node.action > rect {
   fill: #fff7ed;
   stroke: #fb923c;
 }
 
-.decision-flow-node.end rect {
+.decision-flow-node.end > rect {
   fill: #f0fdf4;
   stroke: #4ade80;
 }
 
-.decision-flow-node.start rect {
+.decision-flow-node.start > rect {
   stroke-width: 3;
 }
 
-.decision-flow-node.selected rect,
-.decision-flow-node:focus rect {
+.decision-flow-node.selected > rect,
+.decision-flow-node:focus > rect {
   stroke: #0f766e;
   stroke-width: 4;
 }
 
-.decision-flow-node.connecting-source rect {
+.decision-flow-node.connecting-source > rect {
   stroke: #2563eb;
   stroke-dasharray: 8 4;
   stroke-width: 4;
@@ -1695,6 +1695,27 @@ textarea {
   fill: #17202f;
   font-size: 12px;
   font-weight: 800;
+}
+
+.decision-flow-attachment-mark {
+  pointer-events: none;
+}
+
+.decision-flow-attachment-mark rect {
+  fill: #fff;
+  stroke: #93c5fd;
+  stroke-width: 1;
+}
+
+.decision-flow-attachment-mark svg {
+  color: #2563eb;
+}
+
+.decision-flow-attachment-count {
+  fill: #1d4ed8;
+  font-size: 11px;
+  font-weight: 900;
+  text-anchor: end;
 }
 
 .decision-authoring-layout {
