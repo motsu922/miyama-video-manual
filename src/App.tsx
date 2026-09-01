@@ -606,6 +606,7 @@ function App() {
   const [flowTool, setFlowTool] = useState<'select' | 'connect'>('select')
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null)
   const [flowContextMenu, setFlowContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
+  const [copiedDecisionNode, setCopiedDecisionNode] = useState<DecisionNode | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
   const [hasOpenedQrManual, setHasOpenedQrManual] = useState(false)
@@ -618,6 +619,7 @@ function App() {
   const pendingViewerSeekRef = useRef<number | null>(null)
   const annotationSvgRef = useRef<SVGSVGElement | null>(null)
   const flowchartSvgRef = useRef<SVGSVGElement | null>(null)
+  const flowKeyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {})
   const flowDragRef = useRef<{
     nodeId: string
     startX: number
@@ -806,6 +808,7 @@ function App() {
     setFlowTool('select')
     setConnectingFromNodeId(null)
     setFlowContextMenu(null)
+    setCopiedDecisionNode(null)
   }, [selectedManual.id])
 
   useEffect(() => {
@@ -1219,19 +1222,15 @@ function App() {
     })
   }
 
-  const duplicateDecisionNode = (nodeId: string) => {
-    const sourceNode = decisionNodeMap.get(nodeId)
-    const layoutNode = decisionFlowChart.nodes.find((node) => node.node.id === nodeId)
-    if (!sourceNode || !layoutNode) return
-
+  const createDecisionNodeCopy = (sourceNode: DecisionNode, position: { x: number; y: number }) => {
     const createdAt = Date.now()
-    const copiedNode: DecisionNode = {
+    return {
       ...sourceNode,
       id: `decision-copy-${createdAt}`,
       title: `${sourceNode.title || '名称未設定'}（複製）`,
       flowPosition: {
-        x: layoutNode.x + 34,
-        y: layoutNode.y + 34,
+        x: position.x + 34,
+        y: position.y + 34,
       },
       media: sourceNode.media?.map((media, index) => ({ ...media, id: `decision-media-copy-${createdAt}-${index}` })),
       branches: sourceNode.type === 'question'
@@ -1246,9 +1245,38 @@ function App() {
       noNodeId: undefined,
       nextNodeId: undefined,
     }
+  }
+
+  const duplicateDecisionNode = (nodeId: string) => {
+    const sourceNode = decisionNodeMap.get(nodeId)
+    const layoutNode = decisionFlowChart.nodes.find((node) => node.node.id === nodeId)
+    if (!sourceNode || !layoutNode) return
+    const copiedNode = createDecisionNodeCopy(sourceNode, { x: layoutNode.x, y: layoutNode.y })
     updateManual({ decisionNodes: [...decisionNodes, copiedNode] })
     setSelectedDecisionNodeId(copiedNode.id)
     setFirebaseMessage('カードを複製しました。接続モードで接続先を指定してください')
+  }
+
+  const copyDecisionNode = (nodeId: string) => {
+    const sourceNode = decisionNodeMap.get(nodeId)
+    const layoutNode = decisionFlowChart.nodes.find((node) => node.node.id === nodeId)
+    if (!sourceNode || !layoutNode) return
+    setCopiedDecisionNode({
+      ...sourceNode,
+      flowPosition: { x: layoutNode.x, y: layoutNode.y },
+    })
+    setFirebaseMessage('カードをコピーしました')
+  }
+
+  const pasteDecisionNode = () => {
+    if (!copiedDecisionNode) {
+      setFirebaseMessage('先にカードを選択してCtrl+Cでコピーしてください')
+      return
+    }
+    const copiedNode = createDecisionNodeCopy(copiedDecisionNode, copiedDecisionNode.flowPosition ?? { x: 38, y: 30 })
+    updateManual({ decisionNodes: [...decisionNodes, copiedNode] })
+    setSelectedDecisionNodeId(copiedNode.id)
+    setFirebaseMessage('カードを貼り付けました。接続モードで接続先を指定してください')
   }
 
   const updateDecisionBranch = (
@@ -1346,6 +1374,37 @@ function App() {
       setSelectedDecisionNodeId(remainingNodes[0]?.id ?? null)
     }
   }
+
+  flowKeyboardHandlerRef.current = (event) => {
+    if (view !== 'edit' || !isAbnormalManual || isEditingLocked) return
+    const target = event.target
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable || target.closest('input, textarea, select, [contenteditable="true"]'))
+    ) return
+
+    const shortcutKey = event.key.toLowerCase()
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && shortcutKey === 'c' && selectedDecisionNodeId) {
+      event.preventDefault()
+      copyDecisionNode(selectedDecisionNodeId)
+      return
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && shortcutKey === 'v') {
+      event.preventDefault()
+      pasteDecisionNode()
+      return
+    }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && selectedDecisionNodeId) {
+      event.preventDefault()
+      removeDecisionNode(selectedDecisionNodeId)
+    }
+  }
+
+  useEffect(() => {
+    const handleFlowKeyboardShortcut = (event: KeyboardEvent) => flowKeyboardHandlerRef.current(event)
+    window.addEventListener('keydown', handleFlowKeyboardShortcut)
+    return () => window.removeEventListener('keydown', handleFlowKeyboardShortcut)
+  }, [])
 
   const resetDecisionReview = () => {
     setDecisionNodeId(decisionStartNodeId)
