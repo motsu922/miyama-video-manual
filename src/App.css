@@ -1156,6 +1156,60 @@ textarea {
   color: #fff;
 }
 
+.decision-chain-builder {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.72fr) minmax(180px, 0.7fr) minmax(250px, 1.2fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #c7dff7;
+  border-radius: 8px;
+  background: #f5faff;
+}
+
+.decision-chain-builder > div {
+  align-self: center;
+}
+
+.decision-chain-builder .eyebrow {
+  margin-bottom: 3px;
+}
+
+.decision-chain-builder h3 {
+  color: #17202f;
+  font-size: 15px;
+}
+
+.decision-chain-builder label {
+  gap: 5px;
+  font-size: 12px;
+}
+
+.decision-chain-builder select,
+.decision-chain-builder textarea {
+  padding: 9px 10px;
+}
+
+.decision-chain-builder textarea {
+  min-height: 82px;
+  line-height: 1.45;
+}
+
+.decision-chain-builder button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .decision-flowchart {
   display: grid;
   gap: 10px;
@@ -2989,8 +3043,13 @@ textarea {
   .library-view,
   .flash-test-view,
   .decision-review-view,
-  .decision-authoring-layout {
+  .decision-authoring-layout,
+  .decision-chain-builder {
     grid-template-columns: 1fr;
+  }
+
+  .decision-chain-builder > div {
+    align-self: auto;
   }
 
   .decision-tree-list {
@@ -3084,6 +3143,10 @@ textarea {
     grid-column: 2;
     grid-row: 1 / span 2;
     align-self: center;
+  }
+
+  .decision-chain-builder button {
+    width: 100%;
   }
 
   .view-tabs {
