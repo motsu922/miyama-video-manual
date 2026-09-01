@@ -4839,8 +4839,3 @@ function App() {
 }
 
 export default App
-MethodInvocationException: 
-Line |
-   2 |  … /App.tsx'); [Console]::Out.Write($s.Substring(198000,[Math]::Min(6000 …
-     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     | Exception calling "Substring" with "2" argument(s): "startIndex cannot be larger than length of string. (Parameter 'startIndex')"
