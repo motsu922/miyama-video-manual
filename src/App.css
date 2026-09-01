@@ -1632,7 +1632,7 @@ textarea {
 
 .decision-media-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(190px, 240px));
   gap: 9px;
 }
 
@@ -1640,7 +1640,7 @@ textarea {
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-rows: 104px auto;
+  grid-template-rows: 156px auto;
   border: 1px solid #dbe4ef;
   border-radius: 7px;
   background: #fff;
@@ -1649,9 +1649,39 @@ textarea {
 .decision-media-list img,
 .decision-media-list video {
   width: 100%;
-  height: 104px;
+  height: 156px;
+  display: block;
   background: #17202f;
-  object-fit: cover;
+  object-fit: contain;
+}
+
+.decision-media-preview {
+  position: relative;
+  display: block;
+  background: #17202f;
+}
+
+.decision-media-preview:hover span,
+.decision-media-preview:focus-visible span {
+  opacity: 1;
+}
+
+.decision-media-preview > span {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0;
+  transition: opacity 0.16s ease;
 }
 
 .decision-media-list article > div {
@@ -1665,6 +1695,16 @@ textarea {
   color: #64748b;
   font-size: 11px;
   font-weight: 800;
+}
+
+.decision-media-preview > span {
+  color: #fff;
+}
+
+@media (hover: none) {
+  .decision-media-preview > span {
+    opacity: 1;
+  }
 }
 
 .decision-media-list strong {
