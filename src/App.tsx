@@ -626,6 +626,7 @@ function App() {
   const pendingEditorSeekRef = useRef<number | null>(null)
   const pendingViewerSeekRef = useRef<number | null>(null)
   const annotationSvgRef = useRef<SVGSVGElement | null>(null)
+  const pendingManualIdsRef = useRef(new Set<string>())
   const [firebaseMessage, setFirebaseMessage] = useState(
     isFirebaseConfigured
       ? 'Firebase接続を確認しています'
@@ -744,10 +745,19 @@ function App() {
     const unsubscribe = subscribeManuals(
       (cloudManuals) => {
         if (cloudManuals.length > 0) {
-          setManuals(cloudManuals.map(normalizeManual))
-          setSelectedId((current) =>
-            cloudManuals.some((manual) => manual.id === current) ? current : cloudManuals[0].id,
-          )
+          const normalizedCloudManuals = cloudManuals.map(normalizeManual)
+          const cloudManualIds = new Set(normalizedCloudManuals.map((manual) => manual.id))
+          cloudManualIds.forEach((id) => pendingManualIdsRef.current.delete(id))
+          setManuals((current) => {
+            const pendingManuals = current.filter(
+              (manual) => pendingManualIdsRef.current.has(manual.id) && !cloudManualIds.has(manual.id),
+            )
+            const mergedManuals = [...pendingManuals, ...normalizedCloudManuals]
+            setSelectedId((selectedId) =>
+              mergedManuals.some((manual) => manual.id === selectedId) ? selectedId : mergedManuals[0].id,
+            )
+            return mergedManuals
+          })
           setFirebaseMessage('Firebase接続中: videoManuals を参照しています')
           return
         }
@@ -1612,7 +1622,13 @@ function App() {
   }
 
   const saveWorkflowManual = async (manual: Manual, message: string) => {
-    setManuals((current) => current.map((item) => (item.id === manual.id ? manual : item)))
+    pendingManualIdsRef.current.add(manual.id)
+    setManuals((current) => {
+      const exists = current.some((item) => item.id === manual.id)
+      return exists
+        ? current.map((item) => (item.id === manual.id ? manual : item))
+        : [manual, ...current]
+    })
     try {
       await saveManual(manual)
       setFirebaseMessage(message)
