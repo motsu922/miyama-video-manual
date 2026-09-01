@@ -1265,7 +1265,33 @@ textarea {
   font-weight: 800;
 }
 
+.decision-flowchart-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.decision-flowchart-tools button {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  background: #fff;
+}
+
+.decision-flowchart-tools button:hover:not(:disabled),
+.decision-flowchart-tools button.active {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
 .decision-flowchart-scroll {
+  position: relative;
   overflow: auto;
   border: 1px solid #e4ebf4;
   border-radius: 7px;
@@ -1314,8 +1340,12 @@ textarea {
 }
 
 .decision-flow-node {
-  cursor: pointer;
+  cursor: grab;
   outline: none;
+}
+
+.decision-flow-node:active {
+  cursor: grabbing;
 }
 
 .decision-flow-node rect {
@@ -1342,6 +1372,45 @@ textarea {
 .decision-flow-node:focus rect {
   stroke: #0f766e;
   stroke-width: 4;
+}
+
+.decision-flow-node.connecting-source rect {
+  stroke: #2563eb;
+  stroke-dasharray: 8 4;
+  stroke-width: 4;
+}
+
+.decision-flow-context-menu {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  min-width: 166px;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(15 23 42 / 18%);
+}
+
+.decision-flow-context-menu button {
+  min-height: 36px;
+  padding: 8px 11px;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 0;
+  color: #1e3a5f;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.decision-flow-context-menu button:last-child {
+  border-bottom: 0;
+}
+
+.decision-flow-context-menu button:hover {
+  background: #eff6ff;
 }
 
 .decision-flow-kind {
