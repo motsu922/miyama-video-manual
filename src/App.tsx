@@ -677,6 +677,7 @@ function App() {
     moved: boolean
   } | null>(null)
   const suppressFlowClickRef = useRef(false)
+  const decisionSyncSessionsRef = useRef(new Map<string, { targetIds: string[]; propagate: boolean }>())
   const pendingManualIdsRef = useRef(new Set<string>())
   const [firebaseMessage, setFirebaseMessage] = useState(
     isFirebaseConfigured
@@ -853,6 +854,7 @@ function App() {
     setDecisionSelections([])
     setSelectedDecisionNodeId(startNodeId)
     setIsDecisionEditorOpen(false)
+    decisionSyncSessionsRef.current.clear()
     setDecisionChainTitles('')
     setDecisionChainSourceId('')
     setFlowTool('select')
@@ -1004,9 +1006,37 @@ function App() {
     )
   }
 
+  const getSameTitleNodeIds = (nodeId: string) => {
+    const sourceNode = decisionNodeMap.get(nodeId)
+    if (!sourceNode) return []
+    const sourceTitle = sourceNode.title.trim()
+    return decisionNodes
+      .filter((node) => node.id !== nodeId && node.title.trim() === sourceTitle)
+      .map((node) => node.id)
+  }
+
+  const finishDecisionSync = (nodeId: string, field: 'title' | 'detail') => {
+    decisionSyncSessionsRef.current.delete(`${nodeId}:${field}`)
+  }
+
   const updateDecisionNode = (nodeId: string, patch: Partial<DecisionNode>) => {
+    const field = patch.title !== undefined ? 'title' : patch.detail !== undefined ? 'detail' : null
+    let targetIds = [nodeId]
+    if (field) {
+      const sessionKey = `${nodeId}:${field}`
+      let session = decisionSyncSessionsRef.current.get(sessionKey)
+      if (!session) {
+        const sameTitleNodeIds = getSameTitleNodeIds(nodeId)
+        const propagate = sameTitleNodeIds.length > 0 && window.confirm(
+          `表示内容が同じカードが${sameTitleNodeIds.length}件あります。\nほかのカードにも同じ変更を反映しますか？`,
+        )
+        session = { targetIds: [nodeId, ...sameTitleNodeIds], propagate }
+        decisionSyncSessionsRef.current.set(sessionKey, session)
+      }
+      if (session.propagate) targetIds = session.targetIds
+    }
     updateManual({
-      decisionNodes: decisionNodes.map((node) => (node.id === nodeId ? { ...node, ...patch } : node)),
+      decisionNodes: decisionNodes.map((node) => (targetIds.includes(node.id) ? { ...node, ...patch } : node)),
     })
   }
 
@@ -1229,6 +1259,13 @@ function App() {
       return
     }
 
+    const sameTitleNodeIds = getSameTitleNodeIds(nodeId)
+    const targetNodeIds = sameTitleNodeIds.length > 0 && window.confirm(
+      `表示内容が同じカードが${sameTitleNodeIds.length}件あります。\n追加する資料をほかのカードにも添付しますか？`,
+    )
+      ? [nodeId, ...sameTitleNodeIds]
+      : [nodeId]
+
     setIsUploading(true)
     setFirebaseMessage(`${files.length}件のノード資料をアップロード中`)
     try {
@@ -1244,9 +1281,13 @@ function App() {
           uploadedAt,
         })),
       )
-      const updatedNodes = decisionNodes.map((node) =>
-        node.id === nodeId ? { ...node, media: [...(node.media ?? []), ...media] } : node,
-      )
+      const updatedNodes = decisionNodes.map((node) => {
+        if (!targetNodeIds.includes(node.id)) return node
+        const nodeMedia = node.id === nodeId
+          ? media
+          : media.map((item) => ({ ...item, id: `${item.id}-${node.id}` }))
+        return { ...node, media: [...(node.media ?? []), ...nodeMedia] }
+      })
       const updatedManual: Manual = {
         ...selectedManual,
         decisionNodes: updatedNodes,
@@ -3586,6 +3627,7 @@ function App() {
                             placeholder="判断・処置の名称"
                             value={editingDecisionNode.title}
                             onChange={(event) => updateDecisionNode(editingDecisionNode.id, { title: event.target.value })}
+                            onBlur={() => finishDecisionSync(editingDecisionNode.id, 'title')}
                           />
                         </label>
                         <label className="wide-field">
@@ -3595,6 +3637,7 @@ function App() {
                             placeholder="現場への指示"
                             value={editingDecisionNode.detail}
                             onChange={(event) => updateDecisionNode(editingDecisionNode.id, { detail: event.target.value })}
+                            onBlur={() => finishDecisionSync(editingDecisionNode.id, 'detail')}
                           />
                         </label>
                       </div>
@@ -3729,6 +3772,7 @@ function App() {
                             disabled={isEditingLocked}
                             value={node.title}
                             onChange={(event) => updateDecisionNode(node.id, { title: event.target.value })}
+                            onBlur={() => finishDecisionSync(node.id, 'title')}
                           />
                         </label>
                         <label>
@@ -3737,6 +3781,7 @@ function App() {
                             disabled={isEditingLocked}
                             value={node.detail}
                             onChange={(event) => updateDecisionNode(node.id, { detail: event.target.value })}
+                            onBlur={() => finishDecisionSync(node.id, 'detail')}
                           />
                         </label>
                         <section className="decision-media-section" aria-label="ノードの参照資料">
