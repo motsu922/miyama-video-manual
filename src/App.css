@@ -1413,6 +1413,14 @@ textarea {
   background: #eff6ff;
 }
 
+.decision-flow-context-menu button.danger {
+  color: #b91c1c;
+}
+
+.decision-flow-context-menu button.danger:hover {
+  background: #fef2f2;
+}
+
 .decision-flow-kind {
   fill: #1d4ed8;
   font-size: 11px;
@@ -1617,15 +1625,24 @@ textarea {
   padding: 0;
 }
 
+.decision-duplicate,
 .decision-delete {
   width: 36px;
   height: 36px;
   display: inline-grid;
   place-items: center;
   padding: 0;
-  border: 1px solid #fecaca;
   border-radius: 7px;
   background: #fff;
+}
+
+.decision-duplicate {
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.decision-delete {
+  border: 1px solid #fecaca;
   color: #b91c1c;
 }
 
