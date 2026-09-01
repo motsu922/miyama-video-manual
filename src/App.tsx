@@ -2830,42 +2830,45 @@ function App() {
                     </button>
                   </div>
                 </header>
-                <section className="decision-chain-builder" aria-label="連続する処置の一括登録">
-                  <div>
-                    <p className="eyebrow">連続登録</p>
-                    <h3>複数の処置を連結して追加</h3>
-                  </div>
-                  <label>
-                    連結元の処置（任意）
-                    <select
-                      disabled={isEditingLocked}
-                      value={decisionChainSourceId}
-                      onChange={(event) => setDecisionChainSourceId(event.target.value)}
+                <details className="decision-advanced-tools">
+                  <summary>応用: 複数の処置をまとめて連結</summary>
+                  <section className="decision-chain-builder" aria-label="連続する処置の一括登録">
+                    <div>
+                      <p className="eyebrow">連続登録</p>
+                      <h3>複数の処置を連結して追加</h3>
+                    </div>
+                    <label>
+                      連結元の処置（任意）
+                      <select
+                        disabled={isEditingLocked}
+                        value={decisionChainSourceId}
+                        onChange={(event) => setDecisionChainSourceId(event.target.value)}
+                      >
+                        <option value="">新しい連結チェーンとして追加</option>
+                        {decisionNodes.filter((node) => node.type === 'action').map((node) => (
+                          <option key={node.id} value={node.id}>{node.title || '名称未設定'}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="decision-chain-titles">
+                      連結する処置
+                      <textarea
+                        disabled={isEditingLocked}
+                        placeholder={'処置を1行ずつ入力\n例: 対象品を隔離\n例: 班長へ連絡\n例: 異常履歴を記録'}
+                        value={decisionChainTitles}
+                        onChange={(event) => setDecisionChainTitles(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      disabled={isEditingLocked || decisionChainTitles.split(/\r?\n/).filter((title) => title.trim()).length < 2}
+                      type="button"
+                      onClick={addDecisionActionChain}
                     >
-                      <option value="">新しい連結チェーンとして追加</option>
-                      {decisionNodes.filter((node) => node.type === 'action').map((node) => (
-                        <option key={node.id} value={node.id}>{node.title || '名称未設定'}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="decision-chain-titles">
-                    連結する処置
-                    <textarea
-                      disabled={isEditingLocked}
-                      placeholder={'処置を1行ずつ入力\n例: 対象品を隔離\n例: 班長へ連絡\n例: 異常履歴を記録'}
-                      value={decisionChainTitles}
-                      onChange={(event) => setDecisionChainTitles(event.target.value)}
-                    />
-                  </label>
-                  <button
-                    disabled={isEditingLocked || decisionChainTitles.split(/\r?\n/).filter((title) => title.trim()).length < 2}
-                    type="button"
-                    onClick={addDecisionActionChain}
-                  >
-                    <GitBranch size={16} aria-hidden="true" />
-                    連結して追加
-                  </button>
-                </section>
+                      <GitBranch size={16} aria-hidden="true" />
+                      連結して追加
+                    </button>
+                  </section>
+                </details>
                 <section className="decision-flowchart" aria-label="処置フロー図">
                   <div className="decision-flowchart-heading">
                     <p className="eyebrow">フローチャート</p>
@@ -3159,22 +3162,24 @@ function App() {
                                 ))}
                               </select>
                             </label>
-                            <section className="decision-conditional-next" aria-label="選択肢別の次の処置">
-                              <header>
-                                <div>
-                                  <strong>選択肢別の次の処置</strong>
-                                  <small>同じ処置に合流した後、選択肢によって進み先を変えられます</small>
-                                </div>
-                                <button
-                                  disabled={isEditingLocked || decisionBranchOptions.length === 0}
-                                  type="button"
-                                  onClick={() => addDecisionConditionalNext(node.id)}
-                                >
-                                  <Plus size={15} aria-hidden="true" />
-                                  条件を追加
-                                </button>
-                              </header>
-                              {(node.conditionalNext ?? []).length > 0 && (
+                            <details className="decision-conditional-next">
+                              <summary>応用: 選択肢ごとに次の処置を変える</summary>
+                              <div className="decision-conditional-body">
+                                <header>
+                                  <div>
+                                    <strong>選択肢別の次の処置</strong>
+                                    <small>同じ処置に合流した後、選択肢によって進み先を変えられます</small>
+                                  </div>
+                                  <button
+                                    disabled={isEditingLocked || decisionBranchOptions.length === 0}
+                                    type="button"
+                                    onClick={() => addDecisionConditionalNext(node.id)}
+                                  >
+                                    <Plus size={15} aria-hidden="true" />
+                                    条件を追加
+                                  </button>
+                                </header>
+                                {(node.conditionalNext ?? []).length > 0 && (
                                 <div className="decision-conditional-list">
                                   {(node.conditionalNext ?? []).map((condition, conditionIndex) => (
                                     <article key={`${condition.branchId}-${conditionIndex}`}>
@@ -3216,8 +3221,9 @@ function App() {
                                     </article>
                                   ))}
                                 </div>
-                              )}
-                            </section>
+                                )}
+                              </div>
+                            </details>
                             <div className="decision-quick-adds single-action">
                               <button
                                 disabled={isEditingLocked}
