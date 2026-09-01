@@ -676,6 +676,7 @@ function App() {
     originY: number
     moved: boolean
   } | null>(null)
+  const suppressFlowClickRef = useRef(false)
   const pendingManualIdsRef = useRef(new Set<string>())
   const [firebaseMessage, setFirebaseMessage] = useState(
     isFirebaseConfigured
@@ -1085,6 +1086,7 @@ function App() {
     const layoutNode = decisionFlowChart.nodes.find((item) => item.node.id === nodeId)
     const point = getFlowPoint(event.clientX, event.clientY)
     if (!layoutNode || !point) return
+    suppressFlowClickRef.current = false
     flowDragRef.current = {
       nodeId,
       startX: point.x,
@@ -1104,6 +1106,7 @@ function App() {
     const deltaY = point.y - drag.startY
     if (!drag.moved && Math.abs(deltaX) + Math.abs(deltaY) < 3) return
     drag.moved = true
+    suppressFlowClickRef.current = true
     updateDecisionNode(drag.nodeId, {
       flowPosition: {
         x: Math.max(20, Math.round(drag.originX + deltaX)),
@@ -1116,7 +1119,11 @@ function App() {
     flowDragRef.current = null
   }
 
-  const handleFlowNodeClick = (nodeId: string) => {
+  const handleFlowNodeClick = (nodeId: string, fromPointer = false) => {
+    if (fromPointer && suppressFlowClickRef.current) {
+      suppressFlowClickRef.current = false
+      return
+    }
     setFlowContextMenu(null)
     setFlowEdgeMenu(null)
     if (flowTool !== 'connect' || isEditingLocked) {
@@ -3340,7 +3347,7 @@ function App() {
                             tabIndex={0}
                             onClick={(event) => {
                               event.stopPropagation()
-                              handleFlowNodeClick(layoutNode.node.id)
+                              handleFlowNodeClick(layoutNode.node.id, true)
                             }}
                             onContextMenu={(event) => openFlowContextMenu(layoutNode.node.id, event)}
                             onKeyDown={(event) => {
