@@ -605,7 +605,13 @@ function App() {
   const [decisionChainSourceId, setDecisionChainSourceId] = useState('')
   const [flowTool, setFlowTool] = useState<'select' | 'connect'>('select')
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null)
-  const [flowContextMenu, setFlowContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
+  const [flowContextMenu, setFlowContextMenu] = useState<{
+    nodeId?: string
+    x: number
+    y: number
+    canvasX?: number
+    canvasY?: number
+  } | null>(null)
   const [copiedDecisionNode, setCopiedDecisionNode] = useState<DecisionNode | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
@@ -1099,6 +1105,21 @@ function App() {
     })
   }
 
+  const openFlowCanvasContextMenu = (event: ReactMouseEvent<SVGSVGElement>) => {
+    event.preventDefault()
+    const svg = flowchartSvgRef.current
+    const container = svg?.parentElement
+    const point = getFlowPoint(event.clientX, event.clientY)
+    if (!svg || !container || !point || isEditingLocked) return
+    const bounds = svg.getBoundingClientRect()
+    setFlowContextMenu({
+      x: event.clientX - bounds.left + container.scrollLeft,
+      y: event.clientY - bounds.top + container.scrollTop,
+      canvasX: point.x,
+      canvasY: point.y,
+    })
+  }
+
   const handleDecisionMediaUpload = async (nodeId: string, event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []).filter(
       (file) => file.type.startsWith('image/') || file.type.startsWith('video/'),
@@ -1160,13 +1181,25 @@ function App() {
     }
   }
 
-  const addDecisionNode = (type: DecisionNodeType, link?: { nodeId: string; field: 'nextNodeId' }) => {
+  const addDecisionNode = (
+    type: DecisionNodeType,
+    link?: { nodeId: string; field: 'nextNodeId' },
+    flowPosition?: { x: number; y: number },
+  ) => {
     const id = `decision-${Date.now()}`
+    const linkSource = link ? decisionFlowChart.nodes.find((node) => node.node.id === link.nodeId) : undefined
+    const nextPosition = flowPosition ?? (linkSource
+      ? { x: linkSource.x + 270, y: linkSource.y }
+      : {
+          x: 38 + (decisionFlowChart.nodes.length % 3) * 252,
+          y: 30 + Math.floor(decisionFlowChart.nodes.length / 3) * 136,
+        })
     const nextNode: DecisionNode = {
       id,
       type,
       title: type === 'question' ? '確認する項目' : type === 'action' ? '実施する処置' : '処置を完了',
       detail: type === 'question' ? '現場で判断する条件を入力します。' : '現場で実施する内容を入力します。',
+      flowPosition: nextPosition,
     }
     updateManual({
       decisionNodes: decisionNodes.map((node) =>
@@ -3010,21 +3043,7 @@ function App() {
                 <header className="decision-section-header">
                   <div>
                     <p className="eyebrow">異常処置フロー</p>
-                    <h2>判断ツリーを作成</h2>
-                  </div>
-                  <div className="decision-add-actions">
-                    <button disabled={isEditingLocked} type="button" onClick={() => addDecisionNode('question')}>
-                      <Plus size={16} aria-hidden="true" />
-                      判断を追加
-                    </button>
-                    <button disabled={isEditingLocked} type="button" onClick={() => addDecisionNode('action')}>
-                      <Plus size={16} aria-hidden="true" />
-                      処置を追加
-                    </button>
-                    <button disabled={isEditingLocked} type="button" onClick={() => addDecisionNode('end')}>
-                      <Plus size={16} aria-hidden="true" />
-                      完了を追加
-                    </button>
+                    <h2>フローチャートで作成</h2>
                   </div>
                 </header>
                 <details className="decision-advanced-tools">
@@ -3096,6 +3115,33 @@ function App() {
                       >
                         <Link2 size={16} aria-hidden="true" />
                       </button>
+                      <button
+                        aria-label="判断カードを追加"
+                        disabled={isEditingLocked}
+                        title="判断カードを追加"
+                        type="button"
+                        onClick={() => addDecisionNode('question')}
+                      >
+                        <GitBranch size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        aria-label="処置カードを追加"
+                        disabled={isEditingLocked}
+                        title="処置カードを追加"
+                        type="button"
+                        onClick={() => addDecisionNode('action')}
+                      >
+                        <Plus size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        aria-label="完了カードを追加"
+                        disabled={isEditingLocked}
+                        title="完了カードを追加"
+                        type="button"
+                        onClick={() => addDecisionNode('end')}
+                      >
+                        <CheckCircle2 size={16} aria-hidden="true" />
+                      </button>
                     </div>
                   </div>
                   <div className="decision-flowchart-scroll">
@@ -3111,8 +3157,7 @@ function App() {
                         if (flowTool === 'connect') setConnectingFromNodeId(null)
                       }}
                       onContextMenu={(event) => {
-                        event.preventDefault()
-                        setFlowContextMenu(null)
+                        openFlowCanvasContextMenu(event)
                       }}
                       onPointerLeave={stopFlowNodeDrag}
                       onPointerMove={dragFlowNode}
@@ -3198,6 +3243,51 @@ function App() {
                         )
                       })}
                     </svg>
+                    {flowContextMenu && !flowContextNode && (
+                      <div
+                        className="decision-flow-context-menu"
+                        role="menu"
+                        style={{ left: flowContextMenu.x, top: flowContextMenu.y }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            addDecisionNode('question', undefined, {
+                              x: flowContextMenu.canvasX ?? flowContextMenu.x,
+                              y: flowContextMenu.canvasY ?? flowContextMenu.y,
+                            })
+                            setFlowContextMenu(null)
+                          }}
+                        >
+                          判断カードを置く
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            addDecisionNode('action', undefined, {
+                              x: flowContextMenu.canvasX ?? flowContextMenu.x,
+                              y: flowContextMenu.canvasY ?? flowContextMenu.y,
+                            })
+                            setFlowContextMenu(null)
+                          }}
+                        >
+                          処置カードを置く
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            addDecisionNode('end', undefined, {
+                              x: flowContextMenu.canvasX ?? flowContextMenu.x,
+                              y: flowContextMenu.canvasY ?? flowContextMenu.y,
+                            })
+                            setFlowContextMenu(null)
+                          }}
+                        >
+                          完了カードを置く
+                        </button>
+                      </div>
+                    )}
                     {flowContextMenu && flowContextNode && (
                       <div
                         className="decision-flow-context-menu"
@@ -3271,8 +3361,79 @@ function App() {
                       </div>
                     )}
                   </div>
+                  {editingDecisionNode && (
+                    <section className="decision-flow-quick-editor" aria-label="選択カードを編集">
+                      <select
+                        aria-label="カードの種別"
+                        disabled={isEditingLocked}
+                        value={editingDecisionNode.type}
+                        onChange={(event) => updateDecisionNode(editingDecisionNode.id, { type: event.target.value as DecisionNodeType })}
+                      >
+                        <option value="question">判断</option>
+                        <option value="action">処置</option>
+                        <option value="end">完了</option>
+                      </select>
+                      <input
+                        aria-label="カード名"
+                        disabled={isEditingLocked}
+                        placeholder="判断・処置の名称"
+                        value={editingDecisionNode.title}
+                        onChange={(event) => updateDecisionNode(editingDecisionNode.id, { title: event.target.value })}
+                      />
+                      <textarea
+                        aria-label="現場への指示"
+                        disabled={isEditingLocked}
+                        placeholder="現場への指示"
+                        value={editingDecisionNode.detail}
+                        onChange={(event) => updateDecisionNode(editingDecisionNode.id, { detail: event.target.value })}
+                      />
+                      <div className="decision-flow-quick-actions">
+                        <label className="start-node-toggle">
+                          <input
+                            checked={editingDecisionNode.id === decisionStartNodeId}
+                            disabled={isEditingLocked}
+                            name="decision-start-quick"
+                            type="radio"
+                            onChange={() => updateManual({ decisionStartNodeId: editingDecisionNode.id })}
+                          />
+                          開始地点
+                        </label>
+                        <label className="decision-flow-quick-upload" title="資料を追加">
+                          <UploadCloud size={16} aria-hidden="true" />
+                          <input
+                            accept="image/*,video/*"
+                            disabled={isEditingLocked || isUploading}
+                            multiple
+                            type="file"
+                            onChange={(event) => void handleDecisionMediaUpload(editingDecisionNode.id, event)}
+                          />
+                        </label>
+                        <button
+                          aria-label="カードを複製"
+                          disabled={isEditingLocked}
+                          title="カードを複製"
+                          type="button"
+                          onClick={() => duplicateDecisionNode(editingDecisionNode.id)}
+                        >
+                          <Copy size={16} aria-hidden="true" />
+                        </button>
+                        <button
+                          aria-label="カードを削除"
+                          className="danger"
+                          disabled={isEditingLocked}
+                          title="カードを削除"
+                          type="button"
+                          onClick={() => removeDecisionNode(editingDecisionNode.id)}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </section>
+                  )}
                 </section>
-                <div className="decision-authoring-layout">
+                <details className="decision-flow-details">
+                  <summary>詳細設定</summary>
+                  <div className="decision-authoring-layout">
                   <ol className="decision-tree-list" aria-label="処置フローのツリー">
                     {decisionNodes.map((node, index) => (
                       <li
@@ -3563,7 +3724,8 @@ function App() {
                       </article>
                     ))}
                   </div>
-                </div>
+                  </div>
+                </details>
               </section>
             )}
           </div>
