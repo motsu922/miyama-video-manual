@@ -654,6 +654,7 @@ function App() {
     x: number
     y: number
   } | null>(null)
+  const [decisionEditDraft, setDecisionEditDraft] = useState<DecisionNode | null>(null)
   const [copiedDecisionNode, setCopiedDecisionNode] = useState<DecisionNode | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
@@ -902,6 +903,7 @@ function App() {
     setFlowContextMenu(null)
     setFlowEdgeMenu(null)
     setCopiedDecisionNode(null)
+    setDecisionEditDraft(null)
   }, [selectedManual.id])
 
   useEffect(() => {
@@ -1081,6 +1083,51 @@ function App() {
     })
   }
 
+  const openDecisionEditor = (nodeId: string, nodeOverride?: DecisionNode) => {
+    const node = nodeOverride ?? decisionNodeMap.get(nodeId)
+    if (!node) return
+    setSelectedDecisionNodeId(nodeId)
+    setDecisionEditDraft({ ...node })
+    setIsDecisionEditorOpen(true)
+  }
+
+  const closeDecisionEditor = () => {
+    setDecisionEditDraft(null)
+    setIsDecisionEditorOpen(false)
+  }
+
+  const commitDecisionEditor = () => {
+    if (!decisionEditDraft) {
+      closeDecisionEditor()
+      return
+    }
+
+    const originalNode = decisionNodeMap.get(decisionEditDraft.id)
+    if (!originalNode) {
+      closeDecisionEditor()
+      return
+    }
+
+    const patch: Partial<DecisionNode> = {
+      type: decisionEditDraft.type,
+      title: decisionEditDraft.title,
+      detail: decisionEditDraft.detail,
+    }
+    const hasChanges = originalNode.type !== patch.type || originalNode.title !== patch.title || originalNode.detail !== patch.detail
+    if (hasChanges) {
+      const sameTitleNodeIds = getSameTitleNodeIds(originalNode.id)
+      const shouldPropagate = sameTitleNodeIds.length > 0 && window.confirm(
+        `表示内容が同じカードが${sameTitleNodeIds.length}件あります。\nほかのカードにも同じ変更を反映しますか？`,
+      )
+      const targetIds = shouldPropagate ? [originalNode.id, ...sameTitleNodeIds] : [originalNode.id]
+      updateManual({
+        decisionNodes: decisionNodes.map((node) => (targetIds.includes(node.id) ? { ...node, ...patch } : node)),
+      })
+    }
+    setFirebaseMessage(hasChanges ? 'カードの編集を確定しました' : 'カードの編集内容に変更はありません')
+    closeDecisionEditor()
+  }
+
   const connectDecisionNodes = (sourceId: string, targetId: string) => {
     const sourceNode = decisionNodeMap.get(sourceId)
     if (!sourceNode || !decisionNodeMap.has(targetId) || sourceId === targetId) {
@@ -1198,8 +1245,7 @@ function App() {
     setFlowContextMenu(null)
     setFlowEdgeMenu(null)
     if (flowTool !== 'connect' || isEditingLocked) {
-      setSelectedDecisionNodeId(nodeId)
-      setIsDecisionEditorOpen(true)
+      openDecisionEditor(nodeId)
       return
     }
     if (!connectingFromNodeId) {
@@ -1590,7 +1636,7 @@ function App() {
     }
     if (selectedDecisionNodeId === nodeId) {
       setSelectedDecisionNodeId(remainingNodes[0]?.id ?? null)
-      setIsDecisionEditorOpen(false)
+      closeDecisionEditor()
     }
   }
 
@@ -1598,7 +1644,7 @@ function App() {
     if (view !== 'edit' || !isAbnormalManual) return
     if (event.key === 'Escape' && isDecisionEditorOpen) {
       event.preventDefault()
-      setIsDecisionEditorOpen(false)
+      closeDecisionEditor()
       return
     }
     if (isEditingLocked) return
@@ -3636,7 +3682,7 @@ function App() {
                     <div
                       className="decision-flow-editor-backdrop"
                       onMouseDown={(event) => {
-                        if (event.target === event.currentTarget) setIsDecisionEditorOpen(false)
+                        if (event.target === event.currentTarget) closeDecisionEditor()
                       }}
                     >
                     <section
@@ -3648,13 +3694,13 @@ function App() {
                       <header className="decision-flow-editor-header">
                         <div>
                           <span>カードを編集</span>
-                          <h2 id="decision-flow-editor-title">{editingDecisionNode.title || '名称未設定'}</h2>
+                           <h2 id="decision-flow-editor-title">{(decisionEditDraft ?? editingDecisionNode).title || '名称未設定'}</h2>
                         </div>
                         <button
                           aria-label="カード編集を閉じる"
                           className="decision-flow-editor-close"
                           type="button"
-                          onClick={() => setIsDecisionEditorOpen(false)}
+                          onClick={closeDecisionEditor}
                         >
                           <X size={20} aria-hidden="true" />
                         </button>
@@ -3664,8 +3710,11 @@ function App() {
                           <span>種別</span>
                           <select
                             disabled={isEditingLocked}
-                            value={editingDecisionNode.type}
-                            onChange={(event) => updateDecisionNode(editingDecisionNode.id, { type: event.target.value as DecisionNodeType })}
+                            value={(decisionEditDraft ?? editingDecisionNode).type}
+                            onChange={(event) => setDecisionEditDraft((current) => ({
+                              ...(current ?? editingDecisionNode),
+                              type: event.target.value as DecisionNodeType,
+                            }))}
                           >
                             <option value="question">判断</option>
                             <option value="action">処置</option>
@@ -3677,9 +3726,11 @@ function App() {
                           <input
                             disabled={isEditingLocked}
                             placeholder="判断・処置の名称"
-                            value={editingDecisionNode.title}
-                            onChange={(event) => updateDecisionNode(editingDecisionNode.id, { title: event.target.value })}
-                            onBlur={() => finishDecisionSync(editingDecisionNode.id, 'title')}
+                            value={(decisionEditDraft ?? editingDecisionNode).title}
+                            onChange={(event) => setDecisionEditDraft((current) => ({
+                              ...(current ?? editingDecisionNode),
+                              title: event.target.value,
+                            }))}
                           />
                         </label>
                         <label className="wide-field">
@@ -3687,9 +3738,11 @@ function App() {
                           <textarea
                             disabled={isEditingLocked}
                             placeholder="現場への指示"
-                            value={editingDecisionNode.detail}
-                            onChange={(event) => updateDecisionNode(editingDecisionNode.id, { detail: event.target.value })}
-                            onBlur={() => finishDecisionSync(editingDecisionNode.id, 'detail')}
+                            value={(decisionEditDraft ?? editingDecisionNode).detail}
+                            onChange={(event) => setDecisionEditDraft((current) => ({
+                              ...(current ?? editingDecisionNode),
+                              detail: event.target.value,
+                            }))}
                           />
                         </label>
                       </div>
@@ -3714,6 +3767,24 @@ function App() {
                             onChange={(event) => void handleDecisionMediaUpload(editingDecisionNode.id, event)}
                           />
                         </label>
+                        <button
+                          className="decision-confirm"
+                          disabled={isEditingLocked}
+                          type="button"
+                          onClick={commitDecisionEditor}
+                        >
+                          <CheckCircle2 size={16} aria-hidden="true" />
+                          確定
+                        </button>
+                        <button
+                          className="decision-revert"
+                          disabled={isEditingLocked}
+                          type="button"
+                          onClick={closeDecisionEditor}
+                        >
+                          <RotateCcw size={16} aria-hidden="true" />
+                          戻す
+                        </button>
                         <button
                           disabled={isEditingLocked}
                           title="カードを複製"
@@ -3749,10 +3820,7 @@ function App() {
                       >
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedDecisionNodeId(node.id)
-                            setIsDecisionEditorOpen(true)
-                          }}
+                          onClick={() => openDecisionEditor(node.id)}
                         >
                           <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
                           <strong>{node.title || '名称未設定'}</strong>
