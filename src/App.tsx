@@ -166,47 +166,6 @@ const decisionNodeTypeLabels: Record<DecisionNodeType, string> = {
   end: '完了',
 }
 
-function createDefaultDecisionNodes(): DecisionNode[] {
-  return [
-    {
-      id: 'safety-check',
-      type: 'question',
-      title: '安全に作業を継続できる状態ですか？',
-      detail: 'けが、設備破損、火災・漏電など、直ちに危険につながる要因を確認します。',
-      yesNodeId: 'quality-check',
-      noNodeId: 'stop-and-report',
-    },
-    {
-      id: 'quality-check',
-      type: 'question',
-      title: '品質・設備条件に異常がありますか？',
-      detail: '検査値、外観、設備表示、異音などを基準書と照合します。',
-      yesNodeId: 'isolate-and-record',
-      noNodeId: 'complete',
-    },
-    {
-      id: 'stop-and-report',
-      type: 'action',
-      title: '設備を停止して上長へ連絡',
-      detail: '非常停止または通常停止を行い、対象品と周辺在庫を隔離して班長へ連絡します。',
-      nextNodeId: 'complete',
-    },
-    {
-      id: 'isolate-and-record',
-      type: 'action',
-      title: '対象品を隔離し、異常履歴を登録',
-      detail: '発見時刻、現象、ロット、数量を記録し、品質保証へエスカレーションします。',
-      nextNodeId: 'complete',
-    },
-    {
-      id: 'complete',
-      type: 'end',
-      title: '処置を完了',
-      detail: '処置内容と連絡先を確認し、必要な場合は復旧許可を受けてください。',
-    },
-  ]
-}
-
 const imageKindLabels: Record<InspectionImageKind, string> = {
   ok: 'OK写真',
   ng: 'NG例写真',
@@ -1260,6 +1219,38 @@ function App() {
     })
   }
 
+  const duplicateDecisionNode = (nodeId: string) => {
+    const sourceNode = decisionNodeMap.get(nodeId)
+    const layoutNode = decisionFlowChart.nodes.find((node) => node.node.id === nodeId)
+    if (!sourceNode || !layoutNode) return
+
+    const createdAt = Date.now()
+    const copiedNode: DecisionNode = {
+      ...sourceNode,
+      id: `decision-copy-${createdAt}`,
+      title: `${sourceNode.title || '名称未設定'}（複製）`,
+      flowPosition: {
+        x: layoutNode.x + 34,
+        y: layoutNode.y + 34,
+      },
+      media: sourceNode.media?.map((media, index) => ({ ...media, id: `decision-media-copy-${createdAt}-${index}` })),
+      branches: sourceNode.type === 'question'
+        ? getDecisionBranches(sourceNode).map((branch, index) => ({
+            ...branch,
+            id: `branch-copy-${createdAt}-${index}`,
+            nextNodeId: undefined,
+          }))
+        : undefined,
+      conditionalNext: undefined,
+      yesNodeId: undefined,
+      noNodeId: undefined,
+      nextNodeId: undefined,
+    }
+    updateManual({ decisionNodes: [...decisionNodes, copiedNode] })
+    setSelectedDecisionNodeId(copiedNode.id)
+    setFirebaseMessage('カードを複製しました。接続モードで接続先を指定してください')
+  }
+
   const updateDecisionBranch = (
     nodeId: string,
     branchId: string,
@@ -1326,10 +1317,6 @@ function App() {
   }
 
   const removeDecisionNode = (nodeId: string) => {
-    if (decisionNodes.length <= 1) {
-      setFirebaseMessage('処置フローには少なくとも1つのノードが必要です')
-      return
-    }
     const removedNode = decisionNodeMap.get(nodeId)
     const removedBranchIds = new Set(
       removedNode?.type === 'question' ? getDecisionBranches(removedNode).map((branch) => branch.id) : [],
@@ -2225,36 +2212,28 @@ function App() {
     const id = `M-${Math.floor(1000 + Math.random() * 8999)}`
     const manual: Manual = {
       id,
-      title: '新規動画マニュアル',
-      workName: '新規検査作業',
-      controlNo: `INS-${new Date().getFullYear()}-${id.replace('M-', '')}`,
-      productName: '品名未設定',
-      department: '未設定',
-      owner: '作成者',
+      title: '',
+      workName: '',
+      controlNo: '',
+      productName: '',
+      department: '',
+      owner: '',
       status: 'draft',
       version: 'v0.1',
       duration: '00:00',
       updatedAt: new Date().toISOString().slice(0, 10),
       videoUrl: '',
       manualImages: [],
-      thumbnail:
-        'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
-      tags: ['未分類'],
+      thumbnail: '',
+      tags: [],
       kind: 'standard',
-      reviewers: ['承認者を追加'],
-      checks: [{ id: 'content', label: '動画と手順の整合性を確認', checked: false }],
+      reviewers: [],
+      checks: [],
       approvalHistory: [
         { id: `created-${id}`, action: 'created', actor: '作成者', createdAt: new Date().toISOString() },
       ],
       inspectionImages: [],
-      steps: [
-        {
-          id: 1,
-          time: '00:00',
-          title: '手順タイトル',
-          detail: '現場で迷わないように、短い文章で入力します。',
-        },
-      ],
+      steps: [],
     }
     void saveWorkflowManual(manual, '新規マニュアルをFirebaseへ保存しました')
     setSelectedId(id)
@@ -2263,29 +2242,26 @@ function App() {
 
   const createAbnormalManual = () => {
     const id = `A-${Math.floor(1000 + Math.random() * 8999)}`
-    const decisionNodes = createDefaultDecisionNodes()
     const manual: Manual = {
       id,
-      title: '新規異常処置マニュアル',
-      workName: '異常処置',
-      controlNo: `ABN-${new Date().getFullYear()}-${id.replace('A-', '')}`,
-      productName: '対象品を入力',
-      department: '未設定',
-      owner: '作成者',
+      title: '',
+      workName: '',
+      controlNo: '',
+      productName: '',
+      department: '',
+      owner: '',
       status: 'draft',
       version: 'v0.1',
       duration: '分岐型',
       updatedAt: new Date().toISOString().slice(0, 10),
       videoUrl: '',
       manualImages: [],
-      thumbnail:
-        'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1200&q=80',
-      tags: ['異常対応', '処置フロー'],
+      thumbnail: '',
+      tags: [],
       kind: 'abnormal',
-      decisionNodes,
-      decisionStartNodeId: decisionNodes[0].id,
-      reviewers: ['承認者を追加'],
-      checks: [{ id: 'flow', label: 'YES／NOの分岐と処置内容を確認', checked: false }],
+      decisionNodes: [],
+      reviewers: [],
+      checks: [],
       approvalHistory: [
         { id: `created-${id}`, action: 'created', actor: '作成者', createdAt: new Date().toISOString() },
       ],
@@ -3203,6 +3179,15 @@ function App() {
                             判断カードを挿入
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            duplicateDecisionNode(flowContextNode.id)
+                            setFlowContextMenu(null)
+                          }}
+                        >
+                          カードを複製
+                        </button>
                         {flowContextNode.id !== decisionStartNodeId && (
                           <button
                             type="button"
@@ -3214,6 +3199,16 @@ function App() {
                             開始地点に設定
                           </button>
                         )}
+                        <button
+                          className="danger"
+                          type="button"
+                          onClick={() => {
+                            removeDecisionNode(flowContextNode.id)
+                            setFlowContextMenu(null)
+                          }}
+                        >
+                          カードを削除
+                        </button>
                       </div>
                     )}
                   </div>
@@ -3269,6 +3264,16 @@ function App() {
                             />
                             開始地点
                           </label>
+                          <button
+                            aria-label={`${node.title || 'このノード'}を複製`}
+                            className="decision-duplicate"
+                            disabled={isEditingLocked}
+                            title="ノードを複製"
+                            type="button"
+                            onClick={() => duplicateDecisionNode(node.id)}
+                          >
+                            <Copy size={16} aria-hidden="true" />
+                          </button>
                           <button
                             aria-label={`${node.title || 'このノード'}を削除`}
                             className="decision-delete"
