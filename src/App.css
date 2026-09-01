@@ -1269,18 +1269,35 @@ textarea {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.decision-flow-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.decision-flow-tool-group.add-cards {
+  padding-left: 6px;
+  border-left: 1px solid #dbe4ef;
 }
 
 .decision-flowchart-tools button {
-  display: inline-grid;
-  width: 32px;
+  display: inline-flex;
+  min-width: 58px;
   height: 32px;
-  padding: 0;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   color: #334155;
   background: #fff;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .decision-flowchart-tools button:hover:not(:disabled),
@@ -3356,6 +3373,15 @@ textarea {
   .decision-flow-quick-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .decision-flowchart-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .decision-flowchart-tools {
+    justify-content: flex-start;
   }
 
   .view-tabs {
