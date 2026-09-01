@@ -334,6 +334,16 @@ type DecisionFlowLayoutNode = {
   y: number
 }
 
+type DecisionFlowEdge = {
+  from: DecisionFlowLayoutNode
+  to: DecisionFlowLayoutNode
+  label: string
+  sourceIndex: number
+  sourceCount: number
+  targetIndex: number
+  targetCount: number
+}
+
 function getDecisionTargets(node: DecisionNode) {
   if (node.type === 'question') {
     return getDecisionBranches(node).map((branch) => ({ id: branch.nextNodeId, label: branch.label }))
@@ -418,12 +428,27 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
   })
 
   const layoutById = new Map(layoutNodes.map((item) => [item.node.id, item]))
-  const edges = layoutNodes.flatMap((from) =>
-    getDecisionTargets(from.node).flatMap((target) => {
+  const rawEdges = layoutNodes.flatMap((from) => {
+    const targets = getDecisionTargets(from.node).filter((target) => target.id && layoutById.has(target.id))
+    return targets.flatMap((target, sourceIndex) => {
       const to = target.id ? layoutById.get(target.id) : undefined
-      return to ? [{ from, to, label: target.label }] : []
-    }),
-  )
+      return to ? [{ from, to, label: target.label, sourceIndex, sourceCount: targets.length }] : []
+    })
+  })
+  const incomingCounts = new Map<string, number>()
+  rawEdges.forEach((edge) => {
+    incomingCounts.set(edge.to.node.id, (incomingCounts.get(edge.to.node.id) ?? 0) + 1)
+  })
+  const incomingIndexes = new Map<string, number>()
+  const edges: DecisionFlowEdge[] = rawEdges.map((edge) => {
+    const targetIndex = incomingIndexes.get(edge.to.node.id) ?? 0
+    incomingIndexes.set(edge.to.node.id, targetIndex + 1)
+    return {
+      ...edge,
+      targetIndex,
+      targetCount: incomingCounts.get(edge.to.node.id) ?? 1,
+    }
+  })
 
   return { edges, height, nodeHeight, nodeWidth, nodes: layoutNodes, width }
 }
@@ -433,6 +458,11 @@ function splitDecisionFlowLabel(title: string) {
   const maxLineLength = 12
   if (label.length <= maxLineLength) return [label]
   return [label.slice(0, maxLineLength), `${label.slice(maxLineLength, maxLineLength * 2 - 1)}...`]
+}
+
+function formatDecisionFlowEdgeLabel(label: string) {
+  const normalized = label.trim() || '分岐'
+  return normalized.length > 12 ? `${normalized.slice(0, 11)}...` : normalized
 }
 
 function getVideoDuration(file: File) {
@@ -2680,20 +2710,32 @@ function App() {
                       </defs>
                       {decisionFlowChart.edges.map((edge) => {
                         const startX = edge.from.x + decisionFlowChart.nodeWidth
-                        const startY = edge.from.y + decisionFlowChart.nodeHeight / 2
+                        const getPortOffset = (index: number, count: number) => {
+                          if (count <= 1) return 0
+                          const spacing = Math.min(18, 52 / (count - 1))
+                          return (index - (count - 1) / 2) * spacing
+                        }
+                        const startY = edge.from.y + decisionFlowChart.nodeHeight / 2 + getPortOffset(edge.sourceIndex, edge.sourceCount)
                         const endX = edge.to.x
-                        const endY = edge.to.y + decisionFlowChart.nodeHeight / 2
+                        const endY = edge.to.y + decisionFlowChart.nodeHeight / 2 + getPortOffset(edge.targetIndex, edge.targetCount)
                         const goesForward = endX > startX
-                        const turnX = goesForward ? Math.round((startX + endX) / 2) : Math.max(startX, endX) + 44
+                        const laneOffset = getPortOffset(edge.sourceIndex, edge.sourceCount) * 1.2
+                        const baseTurnX = goesForward ? (startX + endX) / 2 : Math.max(startX, endX) + 44
+                        const turnX = goesForward
+                          ? Math.max(startX + 24, Math.min(endX - 24, Math.round(baseTurnX + laneOffset)))
+                          : Math.round(baseTurnX + laneOffset)
                         const markerId = edge.label === 'YES'
                           ? 'decision-flow-arrow-yes'
                           : edge.label === 'NO'
                             ? 'decision-flow-arrow-no'
                             : 'decision-flow-arrow'
                         return (
-                          <g className={`decision-flow-edge ${edge.label.toLowerCase()}`} key={`${edge.from.node.id}-${edge.label}-${edge.to.node.id}`}>
+                          <g className={`decision-flow-edge ${edge.label.toLowerCase()}`} key={`${edge.from.node.id}-${edge.sourceIndex}-${edge.to.node.id}-${edge.targetIndex}`}>
                             <path d={`M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`} markerEnd={`url(#${markerId})`} />
-                            <text x={turnX} y={startY === endY ? startY - 8 : (startY + endY) / 2 - 8}>{edge.label}</text>
+                            <text x={(startX + turnX) / 2} y={startY - 8}>
+                              <title>{edge.label}</title>
+                              {formatDecisionFlowEdgeLabel(edge.label)}
+                            </text>
                           </g>
                         )
                       })}
