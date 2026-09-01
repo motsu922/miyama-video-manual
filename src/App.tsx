@@ -474,9 +474,10 @@ function splitDecisionFlowLabel(title: string) {
   return [label.slice(0, maxLineLength), `${label.slice(maxLineLength, maxLineLength * 2 - 1)}...`]
 }
 
-function formatDecisionFlowEdgeLabel(label: string) {
+function formatDecisionFlowEdgeLabel(label: string, sourceIndex = 0, sourceCount = 1) {
   const normalized = label.trim() || '分岐'
-  return normalized.length > 12 ? `${normalized.slice(0, 11)}...` : normalized
+  const shortened = normalized.length > 14 ? `${normalized.slice(0, 13)}...` : normalized
+  return sourceCount > 2 ? `${sourceIndex + 1}. ${shortened}` : shortened
 }
 
 function getVideoDuration(file: File) {
@@ -3282,6 +3283,12 @@ function App() {
                             ? 'decision-flow-arrow-no'
                             : 'decision-flow-arrow'
                         const edgePath = `M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`
+                        const edgeLabel = formatDecisionFlowEdgeLabel(edge.label, edge.sourceIndex, edge.sourceCount)
+                        const labelWidth = Math.min(176, Math.max(48, edgeLabel.length * 11 + 18))
+                        const labelX = goesForward
+                          ? Math.max(turnX + 6, endX - labelWidth - 10)
+                          : Math.min(turnX - labelWidth - 6, endX + 10)
+                        const labelY = endY - 27
                         return (
                           <g
                             className={`decision-flow-edge ${edge.label.toLowerCase()}`}
@@ -3290,10 +3297,11 @@ function App() {
                           >
                             <path className="decision-flow-edge-hit" d={edgePath} />
                             <path d={edgePath} markerEnd={`url(#${markerId})`} />
-                            <text x={(startX + turnX) / 2} y={startY - 8}>
+                            <g className="decision-flow-edge-label">
                               <title>{edge.label}</title>
-                              {formatDecisionFlowEdgeLabel(edge.label)}
-                            </text>
+                              <rect height="22" rx="4" width={labelWidth} x={labelX} y={labelY} />
+                              <text x={labelX + 8} y={labelY + 15}>{edgeLabel}</text>
+                            </g>
                           </g>
                         )
                       })}
