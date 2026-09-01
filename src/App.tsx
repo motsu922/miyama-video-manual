@@ -1,5 +1,6 @@
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
   BookOpen,
   CheckCircle2,
@@ -1526,6 +1527,18 @@ function App() {
     setDecisionNodeId(decisionStartNodeId)
     setDecisionPath(decisionStartNodeId ? [decisionStartNodeId] : [])
     setDecisionSelections([])
+  }
+
+  const goBackDecisionStep = () => {
+    if (decisionPath.length <= 1) return
+    const previousPath = decisionPath.slice(0, -1)
+    const previousNodeId = previousPath.at(-1) ?? null
+    const retainedSelections = previousPath
+      .slice(0, -1)
+      .filter((nodeId) => decisionNodeMap.get(nodeId)?.type === 'question').length
+    setDecisionNodeId(previousNodeId)
+    setDecisionPath(previousPath)
+    setDecisionSelections((current) => current.slice(0, retainedSelections))
   }
 
   const advanceDecision = (nextNodeId?: string, selection?: DecisionSelection) => {
@@ -4232,6 +4245,16 @@ function App() {
                   <div className="decision-runner-progress">
                     <span>処置確認</span>
                     <span>{decisionPath.length} / {decisionNodes.length}</span>
+                  </div>
+                  <div className="decision-runner-navigation">
+                    <button disabled={decisionPath.length <= 1} type="button" onClick={goBackDecisionStep}>
+                      <ArrowLeft size={18} aria-hidden="true" />
+                      前の作業に戻る
+                    </button>
+                    <button type="button" onClick={resetDecisionReview}>
+                      <RotateCcw size={17} aria-hidden="true" />
+                      最初に戻る
+                    </button>
                   </div>
                   <span className={`decision-type large ${activeDecisionNode.type}`}>
                     {decisionNodeTypeLabels[activeDecisionNode.type]}
