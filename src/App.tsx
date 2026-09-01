@@ -10,8 +10,10 @@ import {
   GitBranch,
   Library,
   Languages,
+  Link2,
   ListChecks,
   LockKeyhole,
+  MousePointer2,
   PlayCircle,
   Plus,
   Printer,
@@ -28,6 +30,7 @@ import {
 } from 'lucide-react'
 import {
   type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent,
   type SyntheticEvent,
   useEffect,
@@ -433,19 +436,22 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
   const rowGap = 42
   const maxDepth = Math.max(0, ...layers.keys())
   const maxLayerSize = Math.max(1, ...[...layers.values()].map((layer) => layer.length))
-  const width = Math.max(720, 80 + (maxDepth + 1) * (nodeWidth + columnGap))
-  const height = Math.max(240, 60 + maxLayerSize * (nodeHeight + rowGap))
+  let width = Math.max(720, 80 + (maxDepth + 1) * (nodeWidth + columnGap))
+  let height = Math.max(240, 60 + maxLayerSize * (nodeHeight + rowGap))
   const layoutNodes: DecisionFlowLayoutNode[] = []
 
   ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([depth, layer]) => {
     layer.forEach((node, index) => {
       layoutNodes.push({
         node,
-        x: 38 + depth * (nodeWidth + columnGap),
-        y: 30 + index * (nodeHeight + rowGap),
+        x: node.flowPosition?.x ?? 38 + depth * (nodeWidth + columnGap),
+        y: node.flowPosition?.y ?? 30 + index * (nodeHeight + rowGap),
       })
     })
   })
+
+  width = Math.max(width, ...layoutNodes.map((layoutNode) => layoutNode.x + nodeWidth + 38))
+  height = Math.max(height, ...layoutNodes.map((layoutNode) => layoutNode.y + nodeHeight + 30))
 
   const layoutById = new Map(layoutNodes.map((item) => [item.node.id, item]))
   const rawEdges = layoutNodes.flatMap((from) => {
@@ -638,6 +644,9 @@ function App() {
   const [selectedDecisionNodeId, setSelectedDecisionNodeId] = useState<string | null>(null)
   const [decisionChainTitles, setDecisionChainTitles] = useState('')
   const [decisionChainSourceId, setDecisionChainSourceId] = useState('')
+  const [flowTool, setFlowTool] = useState<'select' | 'connect'>('select')
+  const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null)
+  const [flowContextMenu, setFlowContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
   const [hasOpenedQrManual, setHasOpenedQrManual] = useState(false)
@@ -649,6 +658,15 @@ function App() {
   const pendingEditorSeekRef = useRef<number | null>(null)
   const pendingViewerSeekRef = useRef<number | null>(null)
   const annotationSvgRef = useRef<SVGSVGElement | null>(null)
+  const flowchartSvgRef = useRef<SVGSVGElement | null>(null)
+  const flowDragRef = useRef<{
+    nodeId: string
+    startX: number
+    startY: number
+    originX: number
+    originY: number
+    moved: boolean
+  } | null>(null)
   const pendingManualIdsRef = useRef(new Set<string>())
   const [firebaseMessage, setFirebaseMessage] = useState(
     isFirebaseConfigured
@@ -683,6 +701,7 @@ function App() {
   const decisionStartNodeId = selectedManual.decisionStartNodeId ?? decisionNodes[0]?.id ?? null
   const activeDecisionNode = decisionNodeMap.get(decisionNodeId ?? decisionStartNodeId ?? '')
   const editingDecisionNode = decisionNodeMap.get(selectedDecisionNodeId ?? decisionStartNodeId ?? '')
+  const flowContextNode = decisionNodeMap.get(flowContextMenu?.nodeId ?? '')
   const decisionFlowChart = useMemo(
     () => buildDecisionFlowChart(decisionNodes, decisionStartNodeId),
     [decisionNodes, decisionStartNodeId],
@@ -825,6 +844,9 @@ function App() {
     setSelectedDecisionNodeId(startNodeId)
     setDecisionChainTitles('')
     setDecisionChainSourceId('')
+    setFlowTool('select')
+    setConnectingFromNodeId(null)
+    setFlowContextMenu(null)
   }, [selectedManual.id])
 
   useEffect(() => {
@@ -972,6 +994,146 @@ function App() {
   const updateDecisionNode = (nodeId: string, patch: Partial<DecisionNode>) => {
     updateManual({
       decisionNodes: decisionNodes.map((node) => (node.id === nodeId ? { ...node, ...patch } : node)),
+    })
+  }
+
+  const connectDecisionNodes = (sourceId: string, targetId: string) => {
+    const sourceNode = decisionNodeMap.get(sourceId)
+    if (!sourceNode || !decisionNodeMap.has(targetId) || sourceId === targetId) {
+      setFirebaseMessage('別のカードを選んで接続してください')
+      return
+    }
+    if (sourceNode.type === 'end') {
+      setFirebaseMessage('完了カードからは次のカードへ接続できません')
+      return
+    }
+
+    if (sourceNode.type === 'question') {
+      const branches = getDecisionBranches(sourceNode)
+      const emptyBranchIndex = branches.findIndex((branch) => !branch.nextNodeId)
+      const nextBranches = emptyBranchIndex >= 0
+        ? branches.map((branch, index) => (index === emptyBranchIndex ? { ...branch, nextNodeId: targetId } : branch))
+        : [...branches, { id: `branch-${Date.now()}`, label: `選択肢 ${branches.length + 1}`, nextNodeId: targetId }]
+      updateDecisionNode(sourceId, { branches: nextBranches })
+    } else {
+      updateDecisionNode(sourceId, { nextNodeId: targetId })
+    }
+
+    setSelectedDecisionNodeId(targetId)
+    setFirebaseMessage('カードを接続しました')
+  }
+
+  const addDecisionNodeToFlow = (sourceId: string, type: Extract<DecisionNodeType, 'question' | 'action'>) => {
+    const sourceNode = decisionNodeMap.get(sourceId)
+    if (!sourceNode || sourceNode.type === 'end') return
+
+    const id = `decision-${Date.now()}`
+    const createdNode: DecisionNode = {
+      id,
+      type,
+      title: type === 'question' ? '確認する項目' : '実施する処置',
+      detail: type === 'question' ? '現場で判断する条件を入力します。' : '現場で実施する内容を入力します。',
+      flowPosition: {
+        x: Math.max(20, (sourceNode.flowPosition?.x ?? 38) + 270),
+        y: Math.max(20, (sourceNode.flowPosition?.y ?? 30) + (sourceNode.type === 'question' ? 120 : 0)),
+      },
+    }
+
+    const updatedNodes = decisionNodes.map((node) => {
+      if (node.id !== sourceId) return node
+      if (node.type === 'question') {
+        const branches = getDecisionBranches(node)
+        return {
+          ...node,
+          branches: [...branches, { id: `branch-${Date.now()}`, label: `選択肢 ${branches.length + 1}`, nextNodeId: id }],
+        }
+      }
+      createdNode.nextNodeId = node.nextNodeId
+      return { ...node, nextNodeId: id }
+    })
+
+    updateManual({ decisionNodes: [...updatedNodes, createdNode] })
+    setSelectedDecisionNodeId(id)
+    setFirebaseMessage(type === 'question' ? '判断カードを追加しました' : '次の処置カードを追加しました')
+  }
+
+  const getFlowPoint = (clientX: number, clientY: number) => {
+    const svg = flowchartSvgRef.current
+    if (!svg) return null
+    const bounds = svg.getBoundingClientRect()
+    return {
+      x: (clientX - bounds.left) * (decisionFlowChart.width / bounds.width),
+      y: (clientY - bounds.top) * (decisionFlowChart.height / bounds.height),
+    }
+  }
+
+  const startFlowNodeDrag = (nodeId: string, event: PointerEvent<SVGGElement>) => {
+    if (isEditingLocked || flowTool !== 'select' || event.button !== 0) return
+    const layoutNode = decisionFlowChart.nodes.find((item) => item.node.id === nodeId)
+    const point = getFlowPoint(event.clientX, event.clientY)
+    if (!layoutNode || !point) return
+    flowDragRef.current = {
+      nodeId,
+      startX: point.x,
+      startY: point.y,
+      originX: layoutNode.x,
+      originY: layoutNode.y,
+      moved: false,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const dragFlowNode = (event: PointerEvent<SVGSVGElement>) => {
+    const drag = flowDragRef.current
+    const point = getFlowPoint(event.clientX, event.clientY)
+    if (!drag || !point) return
+    const deltaX = point.x - drag.startX
+    const deltaY = point.y - drag.startY
+    if (!drag.moved && Math.abs(deltaX) + Math.abs(deltaY) < 3) return
+    drag.moved = true
+    updateDecisionNode(drag.nodeId, {
+      flowPosition: {
+        x: Math.max(20, Math.round(drag.originX + deltaX)),
+        y: Math.max(20, Math.round(drag.originY + deltaY)),
+      },
+    })
+  }
+
+  const stopFlowNodeDrag = () => {
+    flowDragRef.current = null
+  }
+
+  const handleFlowNodeClick = (nodeId: string) => {
+    setFlowContextMenu(null)
+    if (flowTool !== 'connect' || isEditingLocked) {
+      setSelectedDecisionNodeId(nodeId)
+      return
+    }
+    if (!connectingFromNodeId) {
+      setConnectingFromNodeId(nodeId)
+      setSelectedDecisionNodeId(nodeId)
+      return
+    }
+    if (connectingFromNodeId === nodeId) {
+      setConnectingFromNodeId(null)
+      return
+    }
+    connectDecisionNodes(connectingFromNodeId, nodeId)
+    setConnectingFromNodeId(null)
+  }
+
+  const openFlowContextMenu = (nodeId: string, event: ReactMouseEvent<SVGGElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const svg = flowchartSvgRef.current
+    const container = svg?.parentElement
+    if (!svg || !container || isEditingLocked) return
+    const bounds = svg.getBoundingClientRect()
+    setSelectedDecisionNodeId(nodeId)
+    setFlowContextMenu({
+      nodeId,
+      x: event.clientX - bounds.left + container.scrollLeft,
+      y: event.clientY - bounds.top + container.scrollTop,
     })
   }
 
@@ -2872,15 +3034,54 @@ function App() {
                 <section className="decision-flowchart" aria-label="処置フロー図">
                   <div className="decision-flowchart-heading">
                     <p className="eyebrow">フローチャート</p>
-                    <span>{decisionNodes.length} ノード</span>
+                    <div className="decision-flowchart-tools">
+                      <span>{decisionNodes.length} ノード</span>
+                      <button
+                        aria-label="カードを選択・移動"
+                        className={flowTool === 'select' ? 'active' : ''}
+                        title="カードを選択・移動"
+                        type="button"
+                        onClick={() => {
+                          setFlowTool('select')
+                          setConnectingFromNodeId(null)
+                        }}
+                      >
+                        <MousePointer2 size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        aria-label="カードを接続"
+                        className={flowTool === 'connect' ? 'active' : ''}
+                        disabled={isEditingLocked}
+                        title="カードを接続"
+                        type="button"
+                        onClick={() => {
+                          setFlowTool('connect')
+                          setConnectingFromNodeId(null)
+                        }}
+                      >
+                        <Link2 size={16} aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
                   <div className="decision-flowchart-scroll">
                     <svg
                       aria-label="判断と処置のフローチャート"
                       height={decisionFlowChart.height}
+                      ref={flowchartSvgRef}
                       role="img"
                       viewBox={`0 0 ${decisionFlowChart.width} ${decisionFlowChart.height}`}
                       width={decisionFlowChart.width}
+                      onClick={() => {
+                        setFlowContextMenu(null)
+                        if (flowTool === 'connect') setConnectingFromNodeId(null)
+                      }}
+                      onContextMenu={(event) => {
+                        event.preventDefault()
+                        setFlowContextMenu(null)
+                      }}
+                      onPointerLeave={stopFlowNodeDrag}
+                      onPointerMove={dragFlowNode}
+                      onPointerUp={stopFlowNodeDrag}
                     >
                       <defs>
                         <marker id="decision-flow-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
@@ -2927,21 +3128,27 @@ function App() {
                       {decisionFlowChart.nodes.map((layoutNode) => {
                         const isSelected = layoutNode.node.id === editingDecisionNode?.id
                         const isStart = layoutNode.node.id === decisionStartNodeId
+                        const isConnecting = layoutNode.node.id === connectingFromNodeId
                         const lines = splitDecisionFlowLabel(layoutNode.node.title)
                         return (
                           <g
                             aria-label={`${decisionNodeTypeLabels[layoutNode.node.type]}: ${layoutNode.node.title || '名称未設定'}`}
-                            className={`decision-flow-node ${layoutNode.node.type} ${isSelected ? 'selected' : ''} ${isStart ? 'start' : ''}`}
+                            className={`decision-flow-node ${layoutNode.node.type} ${isSelected ? 'selected' : ''} ${isStart ? 'start' : ''} ${isConnecting ? 'connecting-source' : ''}`}
                             key={layoutNode.node.id}
                             role="button"
                             tabIndex={0}
-                            onClick={() => setSelectedDecisionNodeId(layoutNode.node.id)}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleFlowNodeClick(layoutNode.node.id)
+                            }}
+                            onContextMenu={(event) => openFlowContextMenu(layoutNode.node.id, event)}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault()
-                                setSelectedDecisionNodeId(layoutNode.node.id)
+                                handleFlowNodeClick(layoutNode.node.id)
                               }
                             }}
+                            onPointerDown={(event) => startFlowNodeDrag(layoutNode.node.id, event)}
                           >
                             <rect height={decisionFlowChart.nodeHeight} rx="9" width={decisionFlowChart.nodeWidth} x={layoutNode.x} y={layoutNode.y} />
                             <text className="decision-flow-kind" x={layoutNode.x + 13} y={layoutNode.y + 21}>
@@ -2956,6 +3163,59 @@ function App() {
                         )
                       })}
                     </svg>
+                    {flowContextMenu && flowContextNode && (
+                      <div
+                        className="decision-flow-context-menu"
+                        role="menu"
+                        style={{ left: flowContextMenu.x, top: flowContextMenu.y }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {flowContextNode.type === 'question' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addDecisionBranch(flowContextNode.id)
+                              setFlowContextMenu(null)
+                            }}
+                          >
+                            分岐を追加
+                          </button>
+                        )}
+                        {flowContextNode.type !== 'end' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addDecisionNodeToFlow(flowContextNode.id, 'action')
+                              setFlowContextMenu(null)
+                            }}
+                          >
+                            次の処置を追加
+                          </button>
+                        )}
+                        {flowContextNode.type === 'action' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addDecisionNodeToFlow(flowContextNode.id, 'question')
+                              setFlowContextMenu(null)
+                            }}
+                          >
+                            判断カードを挿入
+                          </button>
+                        )}
+                        {flowContextNode.id !== decisionStartNodeId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateManual({ decisionStartNodeId: flowContextNode.id })
+                              setFlowContextMenu(null)
+                            }}
+                          >
+                            開始地点に設定
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </section>
                 <div className="decision-authoring-layout">
