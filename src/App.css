@@ -2223,6 +2223,34 @@ textarea {
   font-weight: 800;
 }
 
+.decision-runner-navigation {
+  width: min(680px, 100%);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-runner-navigation button {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  color: #1d4ed8;
+  background: #f8fbff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.decision-runner-navigation button:disabled {
+  border-color: #e2e8f0;
+  color: #94a3b8;
+  background: #f8fafc;
+}
+
 .decision-runner h2 {
   max-width: 680px;
   color: #17202f;
@@ -3433,6 +3461,10 @@ textarea {
 
   .decision-flowchart-tools {
     justify-content: flex-start;
+  }
+
+  .decision-runner-navigation {
+    grid-template-columns: 1fr;
   }
 
   .view-tabs {
