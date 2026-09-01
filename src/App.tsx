@@ -636,6 +636,8 @@ function App() {
   const [decisionPath, setDecisionPath] = useState<string[]>([])
   const [decisionSelections, setDecisionSelections] = useState<DecisionSelection[]>([])
   const [selectedDecisionNodeId, setSelectedDecisionNodeId] = useState<string | null>(null)
+  const [decisionChainTitles, setDecisionChainTitles] = useState('')
+  const [decisionChainSourceId, setDecisionChainSourceId] = useState('')
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
   const [hasOpenedQrManual, setHasOpenedQrManual] = useState(false)
@@ -821,6 +823,8 @@ function App() {
     setDecisionPath(startNodeId ? [startNodeId] : [])
     setDecisionSelections([])
     setSelectedDecisionNodeId(startNodeId)
+    setDecisionChainTitles('')
+    setDecisionChainSourceId('')
   }, [selectedManual.id])
 
   useEffect(() => {
@@ -1046,6 +1050,43 @@ function App() {
       ).concat(nextNode),
     })
     setSelectedDecisionNodeId(id)
+  }
+
+  const addDecisionActionChain = () => {
+    const titles = decisionChainTitles
+      .split(/\r?\n/)
+      .map((title) => title.trim())
+      .filter(Boolean)
+    if (titles.length < 2) {
+      setFirebaseMessage('連結する処置を2件以上、1行ずつ入力してください')
+      return
+    }
+
+    const createdAt = Date.now()
+    const sourceNode = decisionNodes.find((node) => node.id === decisionChainSourceId && node.type === 'action')
+    const chainNodes: DecisionNode[] = titles.map((title, index) => ({
+      id: `decision-chain-${createdAt}-${index}`,
+      type: 'action',
+      title,
+      detail: '現場で実施する内容を入力します。',
+      nextNodeId: index < titles.length - 1 ? `decision-chain-${createdAt}-${index + 1}` : sourceNode?.nextNodeId,
+    }))
+    updateManual({
+      decisionNodes: decisionNodes
+        .map((node) =>
+          sourceNode && node.id === sourceNode.id
+            ? { ...node, nextNodeId: chainNodes[0].id }
+            : node,
+        )
+        .concat(chainNodes),
+    })
+    setSelectedDecisionNodeId(chainNodes[0].id)
+    setDecisionChainTitles('')
+    setFirebaseMessage(
+      sourceNode
+        ? `${chainNodes.length}件の処置を「${sourceNode.title || '選択した処置'}」の次へ連結しました`
+        : `${chainNodes.length}件の処置を連結して追加しました`,
+    )
   }
 
   const addDecisionBranch = (nodeId: string) => {
@@ -2789,6 +2830,42 @@ function App() {
                     </button>
                   </div>
                 </header>
+                <section className="decision-chain-builder" aria-label="連続する処置の一括登録">
+                  <div>
+                    <p className="eyebrow">連続登録</p>
+                    <h3>複数の処置を連結して追加</h3>
+                  </div>
+                  <label>
+                    連結元の処置（任意）
+                    <select
+                      disabled={isEditingLocked}
+                      value={decisionChainSourceId}
+                      onChange={(event) => setDecisionChainSourceId(event.target.value)}
+                    >
+                      <option value="">新しい連結チェーンとして追加</option>
+                      {decisionNodes.filter((node) => node.type === 'action').map((node) => (
+                        <option key={node.id} value={node.id}>{node.title || '名称未設定'}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="decision-chain-titles">
+                    連結する処置
+                    <textarea
+                      disabled={isEditingLocked}
+                      placeholder={'処置を1行ずつ入力\n例: 対象品を隔離\n例: 班長へ連絡\n例: 異常履歴を記録'}
+                      value={decisionChainTitles}
+                      onChange={(event) => setDecisionChainTitles(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    disabled={isEditingLocked || decisionChainTitles.split(/\r?\n/).filter((title) => title.trim()).length < 2}
+                    type="button"
+                    onClick={addDecisionActionChain}
+                  >
+                    <GitBranch size={16} aria-hidden="true" />
+                    連結して追加
+                  </button>
+                </section>
                 <section className="decision-flowchart" aria-label="処置フロー図">
                   <div className="decision-flowchart-heading">
                     <p className="eyebrow">フローチャート</p>
