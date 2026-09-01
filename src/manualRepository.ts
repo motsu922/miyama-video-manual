@@ -17,6 +17,17 @@ import type { FlashTestResult, InspectionImageKind, Manual } from './types'
 
 const collectionName = 'videoManuals'
 
+function removeUndefinedFields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(removeUndefinedFields)
+  if (!value || typeof value !== 'object') return value
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, fieldValue]) => fieldValue !== undefined)
+      .map(([key, fieldValue]) => [key, removeUndefinedFields(fieldValue)]),
+  )
+}
+
 export function subscribeManuals(
   onManuals: (manuals: Manual[]) => void,
   onError: (message: string) => void,
@@ -53,7 +64,7 @@ export async function saveManual(manual: Manual) {
   await setDoc(
     doc(db, collectionName, manual.id),
     {
-      ...manual,
+      ...(removeUndefinedFields(manual) as Manual),
       updatedAt: new Date().toISOString().slice(0, 10),
       touchedAt: serverTimestamp(),
     },
