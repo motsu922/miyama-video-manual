@@ -344,11 +344,24 @@ type DecisionFlowEdge = {
   targetCount: number
 }
 
-function getDecisionTargets(node: DecisionNode) {
+type DecisionSelection = {
+  branchId: string
+  label: string
+}
+
+function getDecisionTargets(node: DecisionNode, getBranchLabel?: (branchId: string) => string) {
   if (node.type === 'question') {
     return getDecisionBranches(node).map((branch) => ({ id: branch.nextNodeId, label: branch.label }))
   }
-  if (node.type === 'action') return [{ id: node.nextNodeId, label: '次へ' }]
+  if (node.type === 'action') {
+    return [
+      { id: node.nextNodeId, label: '共通' },
+      ...(node.conditionalNext ?? []).map((condition) => ({
+        id: condition.nextNodeId,
+        label: `条件: ${getBranchLabel?.(condition.branchId) ?? '選択肢'}`,
+      })),
+    ]
+  }
   return []
 }
 
@@ -362,6 +375,13 @@ function getDecisionBranches(node: DecisionNode) {
 
 function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | null) {
   const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  const branchLabels = new Map(
+    nodes.flatMap((node) =>
+      node.type === 'question' ? getDecisionBranches(node).map((branch) => [branch.id, branch.label] as const) : [],
+    ),
+  )
+  const getTargets = (node: DecisionNode) =>
+    getDecisionTargets(node, (branchId) => branchLabels.get(branchId) ?? '選択肢')
   const firstNodeId = startNodeId ?? nodes[0]?.id
   const depthById = new Map<string, number>()
   const queue = firstNodeId && nodeById.has(firstNodeId) ? [firstNodeId] : []
@@ -371,7 +391,7 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
     const node = nodeById.get(queue[index])
     if (!node) continue
     const depth = depthById.get(node.id) ?? 0
-    getDecisionTargets(node).forEach((target) => {
+    getTargets(node).forEach((target) => {
       if (!target.id || !nodeById.has(target.id) || depthById.has(target.id)) return
       depthById.set(target.id, depth + 1)
       queue.push(target.id)
@@ -384,7 +404,7 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
     nodes.forEach((node) => {
       const sourceDepth = depthById.get(node.id)
       if (sourceDepth === undefined) return
-      getDecisionTargets(node).forEach((target) => {
+      getTargets(node).forEach((target) => {
         if (!target.id || target.id === firstNodeId || !nodeById.has(target.id)) return
         const targetDepth = sourceDepth + 1
         if ((depthById.get(target.id) ?? -1) >= targetDepth) return
@@ -429,7 +449,7 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
 
   const layoutById = new Map(layoutNodes.map((item) => [item.node.id, item]))
   const rawEdges = layoutNodes.flatMap((from) => {
-    const targets = getDecisionTargets(from.node).filter((target) => target.id && layoutById.has(target.id))
+    const targets = getTargets(from.node).filter((target) => target.id && layoutById.has(target.id))
     return targets.flatMap((target, sourceIndex) => {
       const to = target.id ? layoutById.get(target.id) : undefined
       return to ? [{ from, to, label: target.label, sourceIndex, sourceCount: targets.length }] : []
@@ -614,6 +634,7 @@ function App() {
   const [viewerClipIndex, setViewerClipIndex] = useState(0)
   const [decisionNodeId, setDecisionNodeId] = useState<string | null>(null)
   const [decisionPath, setDecisionPath] = useState<string[]>([])
+  const [decisionSelections, setDecisionSelections] = useState<DecisionSelection[]>([])
   const [selectedDecisionNodeId, setSelectedDecisionNodeId] = useState<string | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
@@ -646,6 +667,15 @@ function App() {
   )
   const decisionNodeMap = useMemo(
     () => new Map(decisionNodes.map((node) => [node.id, node])),
+    [decisionNodes],
+  )
+  const decisionBranchOptions = useMemo(
+    () =>
+      decisionNodes.flatMap((node) =>
+        node.type === 'question'
+          ? getDecisionBranches(node).map((branch) => ({ ...branch, nodeTitle: node.title || '名称未設定' }))
+          : [],
+      ),
     [decisionNodes],
   )
   const decisionStartNodeId = selectedManual.decisionStartNodeId ?? decisionNodes[0]?.id ?? null
@@ -789,6 +819,7 @@ function App() {
     const startNodeId = manual.decisionStartNodeId ?? manual.decisionNodes?.[0]?.id ?? null
     setDecisionNodeId(startNodeId)
     setDecisionPath(startNodeId ? [startNodeId] : [])
+    setDecisionSelections([])
     setSelectedDecisionNodeId(startNodeId)
   }, [selectedManual.id])
 
@@ -1048,7 +1079,47 @@ function App() {
       setFirebaseMessage('判断ノードには選択肢を2つ以上残してください')
       return
     }
-    updateDecisionNode(nodeId, { branches: branches.filter((branch) => branch.id !== branchId) })
+    updateManual({
+      decisionNodes: decisionNodes.map((currentNode) => {
+        if (currentNode.id === nodeId) {
+          return { ...currentNode, branches: branches.filter((branch) => branch.id !== branchId) }
+        }
+        return {
+          ...currentNode,
+          conditionalNext: currentNode.conditionalNext?.filter((condition) => condition.branchId !== branchId),
+        }
+      }),
+    })
+  }
+
+  const addDecisionConditionalNext = (nodeId: string) => {
+    const node = decisionNodeMap.get(nodeId)
+    if (!node) return
+    updateDecisionNode(nodeId, {
+      conditionalNext: [...(node.conditionalNext ?? []), { branchId: '' }],
+    })
+  }
+
+  const updateDecisionConditionalNext = (
+    nodeId: string,
+    conditionIndex: number,
+    patch: { branchId?: string; nextNodeId?: string },
+  ) => {
+    const node = decisionNodeMap.get(nodeId)
+    if (!node) return
+    updateDecisionNode(nodeId, {
+      conditionalNext: (node.conditionalNext ?? []).map((condition, index) =>
+        index === conditionIndex ? { ...condition, ...patch } : condition,
+      ),
+    })
+  }
+
+  const removeDecisionConditionalNext = (nodeId: string, conditionIndex: number) => {
+    const node = decisionNodeMap.get(nodeId)
+    if (!node) return
+    updateDecisionNode(nodeId, {
+      conditionalNext: (node.conditionalNext ?? []).filter((_, index) => index !== conditionIndex),
+    })
   }
 
   const removeDecisionNode = (nodeId: string) => {
@@ -1056,6 +1127,10 @@ function App() {
       setFirebaseMessage('処置フローには少なくとも1つのノードが必要です')
       return
     }
+    const removedNode = decisionNodeMap.get(nodeId)
+    const removedBranchIds = new Set(
+      removedNode?.type === 'question' ? getDecisionBranches(removedNode).map((branch) => branch.id) : [],
+    )
     const remainingNodes = decisionNodes
       .filter((node) => node.id !== nodeId)
       .map((node) => ({
@@ -1066,6 +1141,7 @@ function App() {
         branches: node.branches?.map((branch) =>
           branch.nextNodeId === nodeId ? { ...branch, nextNodeId: undefined } : branch,
         ),
+        conditionalNext: node.conditionalNext?.filter((condition) => !removedBranchIds.has(condition.branchId)),
       }))
     updateManual({
       decisionNodes: remainingNodes,
@@ -1084,15 +1160,28 @@ function App() {
   const resetDecisionReview = () => {
     setDecisionNodeId(decisionStartNodeId)
     setDecisionPath(decisionStartNodeId ? [decisionStartNodeId] : [])
+    setDecisionSelections([])
   }
 
-  const advanceDecision = (nextNodeId?: string) => {
+  const advanceDecision = (nextNodeId?: string, selection?: DecisionSelection) => {
     if (!nextNodeId || !decisionNodeMap.has(nextNodeId)) {
       setFirebaseMessage('次に進む分岐先を設定してください')
       return
     }
     setDecisionNodeId(nextNodeId)
     setDecisionPath((current) => [...current, nextNodeId])
+    if (selection) setDecisionSelections((current) => [...current, selection])
+  }
+
+  const getDecisionActionNext = (node: DecisionNode) => {
+    const condition = [...decisionSelections]
+      .reverse()
+      .map((selection) => ({ selection, condition: node.conditionalNext?.find((item) => item.branchId === selection.branchId) }))
+      .find((match) => Boolean(match.condition?.nextNodeId))
+    return {
+      nextNodeId: condition?.condition?.nextNodeId ?? node.nextNodeId,
+      matchedSelection: condition?.selection,
+    }
   }
 
   const copyManualQrLink = async () => {
@@ -2981,7 +3070,7 @@ function App() {
                         {node.type === 'action' && (
                           <>
                             <label>
-                              次の処置
+                              共通の次の処置
                               <select
                                 disabled={isEditingLocked}
                                 value={node.nextNodeId ?? ''}
@@ -2993,6 +3082,65 @@ function App() {
                                 ))}
                               </select>
                             </label>
+                            <section className="decision-conditional-next" aria-label="選択肢別の次の処置">
+                              <header>
+                                <div>
+                                  <strong>選択肢別の次の処置</strong>
+                                  <small>同じ処置に合流した後、選択肢によって進み先を変えられます</small>
+                                </div>
+                                <button
+                                  disabled={isEditingLocked || decisionBranchOptions.length === 0}
+                                  type="button"
+                                  onClick={() => addDecisionConditionalNext(node.id)}
+                                >
+                                  <Plus size={15} aria-hidden="true" />
+                                  条件を追加
+                                </button>
+                              </header>
+                              {(node.conditionalNext ?? []).length > 0 && (
+                                <div className="decision-conditional-list">
+                                  {(node.conditionalNext ?? []).map((condition, conditionIndex) => (
+                                    <article key={`${condition.branchId}-${conditionIndex}`}>
+                                      <label>
+                                        先に選んだ選択肢
+                                        <select
+                                          disabled={isEditingLocked}
+                                          value={condition.branchId}
+                                          onChange={(event) => updateDecisionConditionalNext(node.id, conditionIndex, { branchId: event.target.value })}
+                                        >
+                                          <option value="">選択してください</option>
+                                          {decisionBranchOptions.map((branch) => (
+                                            <option key={branch.id} value={branch.id}>{branch.nodeTitle} / {branch.label || '名称未設定'}</option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                      <label>
+                                        次の処置
+                                        <select
+                                          disabled={isEditingLocked}
+                                          value={condition.nextNodeId ?? ''}
+                                          onChange={(event) => updateDecisionConditionalNext(node.id, conditionIndex, { nextNodeId: event.target.value || undefined })}
+                                        >
+                                          <option value="">選択してください</option>
+                                          {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
+                                            <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                      <button
+                                        aria-label="条件を削除"
+                                        disabled={isEditingLocked}
+                                        title="条件を削除"
+                                        type="button"
+                                        onClick={() => removeDecisionConditionalNext(node.id, conditionIndex)}
+                                      >
+                                        <Trash2 size={15} aria-hidden="true" />
+                                      </button>
+                                    </article>
+                                  ))}
+                                </div>
+                              )}
+                            </section>
                             <div className="decision-quick-adds single-action">
                               <button
                                 disabled={isEditingLocked}
@@ -3418,6 +3566,12 @@ function App() {
                   </span>
                   <h2>{activeDecisionNode.title || '名称未設定'}</h2>
                   <p>{activeDecisionNode.detail || '現場への指示を入力してください。'}</p>
+                  {decisionSelections.length > 0 && (
+                    <div className="decision-route-context">
+                      <span>引継ぎ中の選択</span>
+                      <strong>{decisionSelections.map((selection) => selection.label).join(' / ')}</strong>
+                    </div>
+                  )}
                   {activeDecisionNode.media?.length ? (
                     <section className="decision-runner-media" aria-label="この手順の参照資料">
                       {activeDecisionNode.media.map((media) =>
@@ -3442,7 +3596,7 @@ function App() {
                           className={`decision-answer ${branch.label.toLowerCase()}`}
                           key={branch.id}
                           type="button"
-                          onClick={() => advanceDecision(branch.nextNodeId)}
+                          onClick={() => advanceDecision(branch.nextNodeId, { branchId: branch.id, label: branch.label || '選択肢' })}
                         >
                           {branch.label || '選択してください'}
                         </button>
@@ -3450,9 +3604,21 @@ function App() {
                     </div>
                   )}
                   {activeDecisionNode.type === 'action' && (
-                    <button className="decision-next-action" type="button" onClick={() => advanceDecision(activeDecisionNode.nextNodeId)}>
-                      処置を実施した。次へ進む
-                    </button>
+                    (() => {
+                      const actionNext = getDecisionActionNext(activeDecisionNode)
+                      return (
+                        <>
+                          {actionNext.matchedSelection && (
+                            <small className="decision-conditional-note">
+                              「{actionNext.matchedSelection.label}」の選択に応じた次の処置へ進みます
+                            </small>
+                          )}
+                          <button className="decision-next-action" type="button" onClick={() => advanceDecision(actionNext.nextNodeId)}>
+                            処置を実施した。次へ進む
+                          </button>
+                        </>
+                      )
+                    })()
                   )}
                   {activeDecisionNode.type === 'end' && (
                     <div className="decision-complete-state">
