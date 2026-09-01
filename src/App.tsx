@@ -336,13 +336,18 @@ type DecisionFlowLayoutNode = {
 
 function getDecisionTargets(node: DecisionNode) {
   if (node.type === 'question') {
-    return [
-      { id: node.yesNodeId, label: 'YES' },
-      { id: node.noNodeId, label: 'NO' },
-    ]
+    return getDecisionBranches(node).map((branch) => ({ id: branch.nextNodeId, label: branch.label }))
   }
   if (node.type === 'action') return [{ id: node.nextNodeId, label: '次へ' }]
   return []
+}
+
+function getDecisionBranches(node: DecisionNode) {
+  if (node.branches?.length) return node.branches
+  return [
+    { id: 'yes', label: 'YES', nextNodeId: node.yesNodeId },
+    { id: 'no', label: 'NO', nextNodeId: node.noNodeId },
+  ]
 }
 
 function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | null) {
@@ -956,10 +961,7 @@ function App() {
     }
   }
 
-  const addDecisionNode = (
-    type: DecisionNodeType,
-    link?: { nodeId: string; field: 'yesNodeId' | 'noNodeId' | 'nextNodeId' },
-  ) => {
+  const addDecisionNode = (type: DecisionNodeType, link?: { nodeId: string; field: 'nextNodeId' }) => {
     const id = `decision-${Date.now()}`
     const nextNode: DecisionNode = {
       id,
@@ -975,6 +977,40 @@ function App() {
     setSelectedDecisionNodeId(id)
   }
 
+  const addDecisionBranch = (nodeId: string) => {
+    const node = decisionNodeMap.get(nodeId)
+    if (!node) return
+    const branches = getDecisionBranches(node)
+    updateDecisionNode(nodeId, {
+      branches: [...branches, { id: `branch-${Date.now()}`, label: `選択肢 ${branches.length + 1}` }],
+    })
+  }
+
+  const updateDecisionBranch = (
+    nodeId: string,
+    branchId: string,
+    patch: { label?: string; nextNodeId?: string },
+  ) => {
+    const node = decisionNodeMap.get(nodeId)
+    if (!node) return
+    updateDecisionNode(nodeId, {
+      branches: getDecisionBranches(node).map((branch) =>
+        branch.id === branchId ? { ...branch, ...patch } : branch,
+      ),
+    })
+  }
+
+  const removeDecisionBranch = (nodeId: string, branchId: string) => {
+    const node = decisionNodeMap.get(nodeId)
+    if (!node) return
+    const branches = getDecisionBranches(node)
+    if (branches.length <= 2) {
+      setFirebaseMessage('判断ノードには選択肢を2つ以上残してください')
+      return
+    }
+    updateDecisionNode(nodeId, { branches: branches.filter((branch) => branch.id !== branchId) })
+  }
+
   const removeDecisionNode = (nodeId: string) => {
     if (decisionNodes.length <= 1) {
       setFirebaseMessage('処置フローには少なくとも1つのノードが必要です')
@@ -987,6 +1023,9 @@ function App() {
         yesNodeId: node.yesNodeId === nodeId ? undefined : node.yesNodeId,
         noNodeId: node.noNodeId === nodeId ? undefined : node.noNodeId,
         nextNodeId: node.nextNodeId === nodeId ? undefined : node.nextNodeId,
+        branches: node.branches?.map((branch) =>
+          branch.nextNodeId === nodeId ? { ...branch, nextNodeId: undefined } : branch,
+        ),
       }))
     updateManual({
       decisionNodes: remainingNodes,
@@ -2704,7 +2743,7 @@ function App() {
                           <strong>{node.title || '名称未設定'}</strong>
                           <small>
                             {node.type === 'question'
-                              ? `YES: ${decisionNodeMap.get(node.yesNodeId ?? '')?.title ?? '未設定'} / NO: ${decisionNodeMap.get(node.noNodeId ?? '')?.title ?? '未設定'}`
+                              ? getDecisionBranches(node).map((branch) => `${branch.label}: ${decisionNodeMap.get(branch.nextNodeId ?? '')?.title ?? '未設定'}`).join(' / ')
                               : node.type === 'action'
                                 ? `次へ: ${decisionNodeMap.get(node.nextNodeId ?? '')?.title ?? '未設定'}`
                                 : '処置フロー終了'}
@@ -2819,52 +2858,54 @@ function App() {
                         </section>
                         {node.type === 'question' && (
                           <>
-                            <div className="decision-link-fields">
-                              <label>
-                                YESの分岐先
-                                <select
-                                  disabled={isEditingLocked}
-                                  value={node.yesNodeId ?? ''}
-                                  onChange={(event) => updateDecisionNode(node.id, { yesNodeId: event.target.value || undefined })}
-                                >
-                                  <option value="">選択してください</option>
-                                  {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
-                                    <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label>
-                                NOの分岐先
-                                <select
-                                  disabled={isEditingLocked}
-                                  value={node.noNodeId ?? ''}
-                                  onChange={(event) => updateDecisionNode(node.id, { noNodeId: event.target.value || undefined })}
-                                >
-                                  <option value="">選択してください</option>
-                                  {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
-                                    <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
-                                  ))}
-                                </select>
-                              </label>
-                            </div>
-                            <div className="decision-quick-adds">
-                              <button
-                                disabled={isEditingLocked}
-                                type="button"
-                                onClick={() => addDecisionNode('action', { nodeId: node.id, field: 'yesNodeId' })}
-                              >
-                                <Plus size={15} aria-hidden="true" />
-                                YESの先に処置を追加
-                              </button>
-                              <button
-                                disabled={isEditingLocked}
-                                type="button"
-                                onClick={() => addDecisionNode('action', { nodeId: node.id, field: 'noNodeId' })}
-                              >
-                                <Plus size={15} aria-hidden="true" />
-                                NOの先に処置を追加
-                              </button>
-                            </div>
+                            <section className="decision-branches-editor" aria-label="判断の分岐先">
+                              <header>
+                                <div>
+                                  <strong>選択肢と分岐先</strong>
+                                  <small>選択肢は3つ以上に増やせます</small>
+                                </div>
+                                <button disabled={isEditingLocked} type="button" onClick={() => addDecisionBranch(node.id)}>
+                                  <Plus size={15} aria-hidden="true" />
+                                  選択肢を追加
+                                </button>
+                              </header>
+                              <div className="decision-branch-list">
+                                {getDecisionBranches(node).map((branch) => (
+                                  <article key={branch.id}>
+                                    <label>
+                                      選択肢
+                                      <input
+                                        disabled={isEditingLocked}
+                                        value={branch.label}
+                                        onChange={(event) => updateDecisionBranch(node.id, branch.id, { label: event.target.value })}
+                                      />
+                                    </label>
+                                    <label>
+                                      分岐先
+                                      <select
+                                        disabled={isEditingLocked}
+                                        value={branch.nextNodeId ?? ''}
+                                        onChange={(event) => updateDecisionBranch(node.id, branch.id, { nextNodeId: event.target.value || undefined })}
+                                      >
+                                        <option value="">選択してください</option>
+                                        {decisionNodes.filter((target) => target.id !== node.id).map((target) => (
+                                          <option key={target.id} value={target.id}>{target.title || '名称未設定'}</option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <button
+                                      aria-label={`${branch.label || 'この選択肢'}を削除`}
+                                      disabled={isEditingLocked || getDecisionBranches(node).length <= 2}
+                                      title="選択肢を削除"
+                                      type="button"
+                                      onClick={() => removeDecisionBranch(node.id, branch.id)}
+                                    >
+                                      <Trash2 size={15} aria-hidden="true" />
+                                    </button>
+                                  </article>
+                                ))}
+                              </div>
+                            </section>
                           </>
                         )}
                         {node.type === 'action' && (
@@ -3326,12 +3367,16 @@ function App() {
                   ) : null}
                   {activeDecisionNode.type === 'question' && (
                     <div className="decision-answer-actions">
-                      <button className="decision-answer yes" type="button" onClick={() => advanceDecision(activeDecisionNode.yesNodeId)}>
-                        YES
-                      </button>
-                      <button className="decision-answer no" type="button" onClick={() => advanceDecision(activeDecisionNode.noNodeId)}>
-                        NO
-                      </button>
+                      {getDecisionBranches(activeDecisionNode).map((branch) => (
+                        <button
+                          className={`decision-answer ${branch.label.toLowerCase()}`}
+                          key={branch.id}
+                          type="button"
+                          onClick={() => advanceDecision(branch.nextNodeId)}
+                        >
+                          {branch.label || '選択してください'}
+                        </button>
+                      ))}
                     </div>
                   )}
                   {activeDecisionNode.type === 'action' && (
