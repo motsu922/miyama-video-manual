@@ -296,10 +296,21 @@ type DecisionFlowLayoutNode = {
   y: number
 }
 
+type DecisionFlowConnectionKind = 'branch' | 'next' | 'conditional'
+
+type DecisionFlowTarget = {
+  id?: string
+  label: string
+  branchId?: string
+  connectionKind: DecisionFlowConnectionKind
+}
+
 type DecisionFlowEdge = {
   from: DecisionFlowLayoutNode
   to: DecisionFlowLayoutNode
   label: string
+  branchId?: string
+  connectionKind: DecisionFlowConnectionKind
   sourceIndex: number
   sourceCount: number
   targetIndex: number
@@ -311,16 +322,23 @@ type DecisionSelection = {
   label: string
 }
 
-function getDecisionTargets(node: DecisionNode, getBranchLabel?: (branchId: string) => string) {
+function getDecisionTargets(node: DecisionNode, getBranchLabel?: (branchId: string) => string): DecisionFlowTarget[] {
   if (node.type === 'question') {
-    return getDecisionBranches(node).map((branch) => ({ id: branch.nextNodeId, label: branch.label }))
+    return getDecisionBranches(node).map((branch) => ({
+      id: branch.nextNodeId,
+      label: branch.label,
+      branchId: branch.id,
+      connectionKind: 'branch',
+    }))
   }
   if (node.type === 'action') {
     return [
-      { id: node.nextNodeId, label: '共通' },
+      { id: node.nextNodeId, label: '共通', connectionKind: 'next' },
       ...(node.conditionalNext ?? []).map((condition) => ({
         id: condition.nextNodeId,
         label: `条件: ${getBranchLabel?.(condition.branchId) ?? '選択肢'}`,
+        branchId: condition.branchId,
+        connectionKind: 'conditional' as const,
       })),
     ]
   }
@@ -417,7 +435,17 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
     const targets = getTargets(from.node).filter((target) => target.id && layoutById.has(target.id))
     return targets.flatMap((target, sourceIndex) => {
       const to = target.id ? layoutById.get(target.id) : undefined
-      return to ? [{ from, to, label: target.label, sourceIndex, sourceCount: targets.length }] : []
+      return to
+        ? [{
+            from,
+            to,
+            label: target.label,
+            branchId: target.branchId,
+            connectionKind: target.connectionKind,
+            sourceIndex,
+            sourceCount: targets.length,
+          }]
+        : []
     })
   })
   const incomingCounts = new Map<string, number>()
@@ -611,6 +639,14 @@ function App() {
     y: number
     canvasX?: number
     canvasY?: number
+  } | null>(null)
+  const [flowEdgeMenu, setFlowEdgeMenu] = useState<{
+    sourceId: string
+    targetId: string
+    branchId?: string
+    connectionKind: DecisionFlowConnectionKind
+    x: number
+    y: number
   } | null>(null)
   const [copiedDecisionNode, setCopiedDecisionNode] = useState<DecisionNode | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
@@ -814,6 +850,7 @@ function App() {
     setFlowTool('select')
     setConnectingFromNodeId(null)
     setFlowContextMenu(null)
+    setFlowEdgeMenu(null)
     setCopiedDecisionNode(null)
   }, [selectedManual.id])
 
@@ -1073,6 +1110,7 @@ function App() {
 
   const handleFlowNodeClick = (nodeId: string) => {
     setFlowContextMenu(null)
+    setFlowEdgeMenu(null)
     if (flowTool !== 'connect' || isEditingLocked) {
       setSelectedDecisionNodeId(nodeId)
       return
@@ -1097,6 +1135,7 @@ function App() {
     const container = svg?.parentElement
     if (!svg || !container || isEditingLocked) return
     const bounds = svg.getBoundingClientRect()
+    setFlowEdgeMenu(null)
     setSelectedDecisionNodeId(nodeId)
     setFlowContextMenu({
       nodeId,
@@ -1112,12 +1151,56 @@ function App() {
     const point = getFlowPoint(event.clientX, event.clientY)
     if (!svg || !container || !point || isEditingLocked) return
     const bounds = svg.getBoundingClientRect()
+    setFlowEdgeMenu(null)
     setFlowContextMenu({
       x: event.clientX - bounds.left + container.scrollLeft,
       y: event.clientY - bounds.top + container.scrollTop,
       canvasX: point.x,
       canvasY: point.y,
     })
+  }
+
+  const openFlowEdgeMenu = (edge: DecisionFlowEdge, event: ReactMouseEvent<SVGGElement>) => {
+    event.stopPropagation()
+    const svg = flowchartSvgRef.current
+    const container = svg?.parentElement
+    if (!svg || !container || isEditingLocked) return
+    const bounds = svg.getBoundingClientRect()
+    setFlowContextMenu(null)
+    setFlowEdgeMenu({
+      sourceId: edge.from.node.id,
+      targetId: edge.to.node.id,
+      branchId: edge.branchId,
+      connectionKind: edge.connectionKind,
+      x: event.clientX - bounds.left + container.scrollLeft,
+      y: event.clientY - bounds.top + container.scrollTop,
+    })
+  }
+
+  const updateFlowEdgeTarget = (edge: NonNullable<typeof flowEdgeMenu>, nextNodeId?: string) => {
+    const sourceNode = decisionNodeMap.get(edge.sourceId)
+    if (!sourceNode) return
+
+    if (edge.connectionKind === 'branch' && edge.branchId) {
+      updateDecisionNode(edge.sourceId, {
+        branches: getDecisionBranches(sourceNode).map((branch) =>
+          branch.id === edge.branchId ? { ...branch, nextNodeId } : branch,
+        ),
+      })
+    }
+    if (edge.connectionKind === 'next') {
+      updateDecisionNode(edge.sourceId, { nextNodeId })
+    }
+    if (edge.connectionKind === 'conditional' && edge.branchId) {
+      updateDecisionNode(edge.sourceId, {
+        conditionalNext: (sourceNode.conditionalNext ?? []).map((condition) =>
+          condition.branchId === edge.branchId ? { ...condition, nextNodeId } : condition,
+        ),
+      })
+    }
+
+    setFlowEdgeMenu(null)
+    setFirebaseMessage(nextNodeId ? '接続先を変更しました' : '接続を削除しました')
   }
 
   const handleDecisionMediaUpload = async (nodeId: string, event: ChangeEvent<HTMLInputElement>) => {
@@ -3143,6 +3226,7 @@ function App() {
                       width={decisionFlowChart.width}
                       onClick={() => {
                         setFlowContextMenu(null)
+                        setFlowEdgeMenu(null)
                         if (flowTool === 'connect') setConnectingFromNodeId(null)
                       }}
                       onContextMenu={(event) => {
@@ -3184,9 +3268,15 @@ function App() {
                           : edge.label === 'NO'
                             ? 'decision-flow-arrow-no'
                             : 'decision-flow-arrow'
+                        const edgePath = `M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`
                         return (
-                          <g className={`decision-flow-edge ${edge.label.toLowerCase()}`} key={`${edge.from.node.id}-${edge.sourceIndex}-${edge.to.node.id}-${edge.targetIndex}`}>
-                            <path d={`M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`} markerEnd={`url(#${markerId})`} />
+                          <g
+                            className={`decision-flow-edge ${edge.label.toLowerCase()}`}
+                            key={`${edge.from.node.id}-${edge.sourceIndex}-${edge.to.node.id}-${edge.targetIndex}`}
+                            onClick={(event) => openFlowEdgeMenu(edge, event)}
+                          >
+                            <path className="decision-flow-edge-hit" d={edgePath} />
+                            <path d={edgePath} markerEnd={`url(#${markerId})`} />
                             <text x={(startX + turnX) / 2} y={startY - 8}>
                               <title>{edge.label}</title>
                               {formatDecisionFlowEdgeLabel(edge.label)}
@@ -3346,6 +3436,30 @@ function App() {
                           }}
                         >
                           カードを削除
+                        </button>
+                      </div>
+                    )}
+                    {flowEdgeMenu && (
+                      <div
+                        className="decision-flow-edge-menu"
+                        role="dialog"
+                        style={{ left: flowEdgeMenu.x, top: flowEdgeMenu.y }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <label>
+                          接続先
+                          <select
+                            value={flowEdgeMenu.targetId}
+                            onChange={(event) => updateFlowEdgeTarget(flowEdgeMenu, event.target.value || undefined)}
+                          >
+                            <option value="">接続しない</option>
+                            {decisionNodes.filter((node) => node.id !== flowEdgeMenu.sourceId).map((node) => (
+                              <option key={node.id} value={node.id}>{node.title || '名称未設定'}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <button className="danger" type="button" onClick={() => updateFlowEdgeTarget(flowEdgeMenu)}>
+                          接続を削除
                         </button>
                       </div>
                     )}
