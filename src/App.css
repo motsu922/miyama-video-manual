@@ -1483,6 +1483,88 @@ textarea {
   gap: 10px;
 }
 
+.decision-branches-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.decision-branches-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.decision-branches-editor header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.decision-branches-editor header strong {
+  color: #17202f;
+  font-size: 13px;
+}
+
+.decision-branches-editor header small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.decision-branches-editor header button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.decision-branch-list {
+  display: grid;
+  gap: 8px;
+}
+
+.decision-branch-list article {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(160px, 1.2fr) 30px;
+  align-items: end;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #dbe4ef;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.decision-branch-list label {
+  gap: 4px;
+  font-size: 12px;
+}
+
+.decision-branch-list input,
+.decision-branch-list select {
+  padding: 8px 9px;
+}
+
+.decision-branch-list button {
+  width: 30px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff;
+  color: #b91c1c;
+}
+
 .decision-node-editor select {
   width: 100%;
   min-width: 0;
@@ -1753,15 +1835,16 @@ textarea {
 .decision-answer-actions {
   width: min(460px, 100%);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px;
 }
 
 .decision-answer {
   min-height: 104px;
   border-radius: 8px;
+  background: #2563eb;
   color: #fff;
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 900;
 }
 
@@ -2823,6 +2906,20 @@ textarea {
   .manual-qr-actions,
   .decision-quick-adds {
     grid-template-columns: 1fr;
+  }
+
+  .decision-branch-list article {
+    grid-template-columns: 1fr 36px;
+  }
+
+  .decision-branch-list label {
+    grid-column: 1;
+  }
+
+  .decision-branch-list button {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
   }
 
   .view-tabs {
