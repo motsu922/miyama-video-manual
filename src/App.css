@@ -1362,6 +1362,12 @@ textarea {
   background-color: #f8fbff;
   background-image: linear-gradient(#e5edf7 1px, transparent 1px), linear-gradient(90deg, #e5edf7 1px, transparent 1px);
   background-size: 20px 20px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.decision-flowchart-scroll.panning {
+  cursor: grabbing;
 }
 
 .decision-flowchart-scroll > svg {
