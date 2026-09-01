@@ -1565,6 +1565,88 @@ textarea {
   color: #b91c1c;
 }
 
+.decision-conditional-next {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #f5faff;
+}
+
+.decision-conditional-next > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.decision-conditional-next header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.decision-conditional-next header strong {
+  color: #17202f;
+  font-size: 13px;
+}
+
+.decision-conditional-next header small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.decision-conditional-next header button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 7px;
+  background: #fff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.decision-conditional-list {
+  display: grid;
+  gap: 8px;
+}
+
+.decision-conditional-list article {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 1fr) 30px;
+  align-items: end;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #dbeafe;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.decision-conditional-list label {
+  gap: 4px;
+  font-size: 12px;
+}
+
+.decision-conditional-list select {
+  padding: 8px 9px;
+}
+
+.decision-conditional-list button {
+  width: 30px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff;
+  color: #b91c1c;
+}
+
 .decision-node-editor select {
   width: 100%;
   min-width: 0;
@@ -1835,6 +1917,34 @@ textarea {
   color: #475569;
   font-size: 16px;
   line-height: 1.8;
+}
+
+.decision-route-context {
+  max-width: 620px;
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  text-align: left;
+}
+
+.decision-route-context span,
+.decision-conditional-note {
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.decision-route-context strong {
+  color: #17202f;
+  font-size: 14px;
+}
+
+.decision-conditional-note {
+  margin: -6px 0 0;
 }
 
 .decision-runner-media {
@@ -2957,6 +3067,20 @@ textarea {
   }
 
   .decision-branch-list button {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  .decision-conditional-list article {
+    grid-template-columns: 1fr 36px;
+  }
+
+  .decision-conditional-list label {
+    grid-column: 1;
+  }
+
+  .decision-conditional-list button {
     grid-column: 2;
     grid-row: 1 / span 2;
     align-self: center;
