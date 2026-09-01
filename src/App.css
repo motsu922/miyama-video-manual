@@ -1330,6 +1330,16 @@ textarea {
   stroke-width: 2.25;
 }
 
+.decision-flow-edge {
+  cursor: pointer;
+}
+
+.decision-flow-edge-hit {
+  stroke: transparent !important;
+  stroke-width: 18 !important;
+  pointer-events: stroke;
+}
+
 .decision-flow-edge text {
   fill: #475569;
   font-size: 12px;
@@ -1435,6 +1445,47 @@ textarea {
 }
 
 .decision-flow-context-menu button.danger:hover {
+  background: #fef2f2;
+}
+
+.decision-flow-edge-menu {
+  position: absolute;
+  z-index: 6;
+  display: grid;
+  min-width: 190px;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(15 23 42 / 18%);
+}
+
+.decision-flow-edge-menu label {
+  display: grid;
+  gap: 5px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.decision-flow-edge-menu select {
+  min-width: 0;
+  padding: 8px 9px;
+}
+
+.decision-flow-edge-menu button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #b91c1c;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.decision-flow-edge-menu button:hover {
   background: #fef2f2;
 }
 
