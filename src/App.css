@@ -1682,6 +1682,18 @@ textarea {
   background: #eff6ff;
 }
 
+.decision-flow-quick-actions button.decision-confirm {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.decision-flow-quick-actions button.decision-revert {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
 .decision-flow-quick-actions button.danger {
   border-color: #fecaca;
   color: #b91c1c;
