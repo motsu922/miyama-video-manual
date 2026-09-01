@@ -3380,7 +3380,7 @@ function App() {
                     </button>
                   </section>
                 </details>
-                <section className="decision-flowchart" aria-label="処置フロー図">
+                <section className="decision-flowchart" id="decision-flowchart-print" aria-label="処置フロー図">
                   <div className="decision-flowchart-heading">
                     <p className="eyebrow">フローチャート</p>
                     <div className="decision-flowchart-tools">
@@ -3426,6 +3426,15 @@ function App() {
                           完了
                         </button>
                       </div>
+                      <button
+                        className="print-flowchart-button"
+                        title="フローチャートを印刷またはPDF保存"
+                        type="button"
+                        onClick={() => window.print()}
+                      >
+                        <Printer size={16} aria-hidden="true" />
+                        印刷 / PDF
+                      </button>
                     </div>
                   </div>
                   <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef}>
