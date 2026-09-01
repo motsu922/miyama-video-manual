@@ -28,6 +28,7 @@ import {
   UploadCloud,
   Users,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   type ChangeEvent,
@@ -631,6 +632,7 @@ function App() {
   const [decisionPath, setDecisionPath] = useState<string[]>([])
   const [decisionSelections, setDecisionSelections] = useState<DecisionSelection[]>([])
   const [selectedDecisionNodeId, setSelectedDecisionNodeId] = useState<string | null>(null)
+  const [isDecisionEditorOpen, setIsDecisionEditorOpen] = useState(false)
   const [decisionChainTitles, setDecisionChainTitles] = useState('')
   const [decisionChainSourceId, setDecisionChainSourceId] = useState('')
   const [flowTool, setFlowTool] = useState<'select' | 'connect'>('select')
@@ -847,6 +849,7 @@ function App() {
     setDecisionPath(startNodeId ? [startNodeId] : [])
     setDecisionSelections([])
     setSelectedDecisionNodeId(startNodeId)
+    setIsDecisionEditorOpen(false)
     setDecisionChainTitles('')
     setDecisionChainSourceId('')
     setFlowTool('select')
@@ -1061,6 +1064,7 @@ function App() {
 
     updateManual({ decisionNodes: [...updatedNodes, createdNode] })
     setSelectedDecisionNodeId(id)
+    setIsDecisionEditorOpen(true)
     setFirebaseMessage(type === 'question' ? '判断カードを追加しました' : '次の処置カードを追加しました')
   }
 
@@ -1115,6 +1119,7 @@ function App() {
     setFlowEdgeMenu(null)
     if (flowTool !== 'connect' || isEditingLocked) {
       setSelectedDecisionNodeId(nodeId)
+      setIsDecisionEditorOpen(true)
       return
     }
     if (!connectingFromNodeId) {
@@ -1292,6 +1297,7 @@ function App() {
       ).concat(nextNode),
     })
     setSelectedDecisionNodeId(id)
+    setIsDecisionEditorOpen(true)
   }
 
   const addDecisionActionChain = () => {
@@ -1323,6 +1329,7 @@ function App() {
         .concat(chainNodes),
     })
     setSelectedDecisionNodeId(chainNodes[0].id)
+    setIsDecisionEditorOpen(true)
     setDecisionChainTitles('')
     setFirebaseMessage(
       sourceNode
@@ -1345,7 +1352,7 @@ function App() {
     return {
       ...sourceNode,
       id: `decision-copy-${createdAt}`,
-      title: `${sourceNode.title || '名称未設定'}（複製）`,
+      title: sourceNode.title || '名称未設定',
       flowPosition: {
         x: position.x + 34,
         y: position.y + 34,
@@ -1372,6 +1379,7 @@ function App() {
     const copiedNode = createDecisionNodeCopy(sourceNode, { x: layoutNode.x, y: layoutNode.y })
     updateManual({ decisionNodes: [...decisionNodes, copiedNode] })
     setSelectedDecisionNodeId(copiedNode.id)
+    setIsDecisionEditorOpen(true)
     setFirebaseMessage('カードを複製しました。接続モードで接続先を指定してください')
   }
 
@@ -1394,6 +1402,7 @@ function App() {
     const copiedNode = createDecisionNodeCopy(copiedDecisionNode, copiedDecisionNode.flowPosition ?? { x: 38, y: 30 })
     updateManual({ decisionNodes: [...decisionNodes, copiedNode] })
     setSelectedDecisionNodeId(copiedNode.id)
+    setIsDecisionEditorOpen(true)
     setFirebaseMessage('カードを貼り付けました。接続モードで接続先を指定してください')
   }
 
@@ -1490,11 +1499,18 @@ function App() {
     }
     if (selectedDecisionNodeId === nodeId) {
       setSelectedDecisionNodeId(remainingNodes[0]?.id ?? null)
+      setIsDecisionEditorOpen(false)
     }
   }
 
   flowKeyboardHandlerRef.current = (event) => {
-    if (view !== 'edit' || !isAbnormalManual || isEditingLocked) return
+    if (view !== 'edit' || !isAbnormalManual) return
+    if (event.key === 'Escape' && isDecisionEditorOpen) {
+      event.preventDefault()
+      setIsDecisionEditorOpen(false)
+      return
+    }
+    if (isEditingLocked) return
     const target = event.target
     if (
       target instanceof HTMLElement &&
@@ -3485,8 +3501,33 @@ function App() {
                       </div>
                     )}
                   </div>
-                  {editingDecisionNode && (
-                    <section className="decision-flow-quick-editor" aria-label="選択カードを編集">
+                  {isDecisionEditorOpen && editingDecisionNode && (
+                    <div
+                      className="decision-flow-editor-backdrop"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) setIsDecisionEditorOpen(false)
+                      }}
+                    >
+                    <section
+                      aria-labelledby="decision-flow-editor-title"
+                      aria-modal="true"
+                      className="decision-flow-quick-editor"
+                      role="dialog"
+                    >
+                      <header className="decision-flow-editor-header">
+                        <div>
+                          <span>カードを編集</span>
+                          <h2 id="decision-flow-editor-title">{editingDecisionNode.title || '名称未設定'}</h2>
+                        </div>
+                        <button
+                          aria-label="カード編集を閉じる"
+                          className="decision-flow-editor-close"
+                          type="button"
+                          onClick={() => setIsDecisionEditorOpen(false)}
+                        >
+                          <X size={20} aria-hidden="true" />
+                        </button>
+                      </header>
                       <div className="decision-flow-quick-fields">
                         <label>
                           <span>種別</span>
@@ -3561,6 +3602,7 @@ function App() {
                         </button>
                       </div>
                     </section>
+                    </div>
                   )}
                 </section>
                 <details className="decision-flow-details">
@@ -3572,7 +3614,13 @@ function App() {
                         className={`${node.id === decisionStartNodeId ? 'start-node' : ''} ${node.id === editingDecisionNode?.id ? 'selected-node' : ''}`}
                         key={node.id}
                       >
-                        <button type="button" onClick={() => setSelectedDecisionNodeId(node.id)}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDecisionNodeId(node.id)
+                            setIsDecisionEditorOpen(true)
+                          }}
+                        >
                           <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
                           <strong>{node.title || '名称未設定'}</strong>
                           <small>
