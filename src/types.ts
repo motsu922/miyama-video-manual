@@ -106,6 +106,10 @@ export type DecisionNode = {
   type: DecisionNodeType
   title: string
   detail: string
+  flowPosition?: {
+    x: number
+    y: number
+  }
   media?: DecisionNodeMedia[]
   branches?: DecisionBranch[]
   conditionalNext?: DecisionConditionalNext[]
