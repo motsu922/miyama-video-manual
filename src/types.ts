@@ -96,6 +96,11 @@ export type DecisionBranch = {
   nextNodeId?: string
 }
 
+export type DecisionConditionalNext = {
+  branchId: string
+  nextNodeId?: string
+}
+
 export type DecisionNode = {
   id: string
   type: DecisionNodeType
@@ -103,6 +108,7 @@ export type DecisionNode = {
   detail: string
   media?: DecisionNodeMedia[]
   branches?: DecisionBranch[]
+  conditionalNext?: DecisionConditionalNext[]
   yesNodeId?: string
   noNodeId?: string
   nextNodeId?: string
