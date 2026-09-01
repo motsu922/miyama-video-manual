@@ -15,6 +15,7 @@ import {
   ListChecks,
   LockKeyhole,
   MousePointer2,
+  Paperclip,
   PlayCircle,
   Plus,
   Printer,
@@ -335,7 +336,7 @@ function getDecisionTargets(node: DecisionNode, getBranchLabel?: (branchId: stri
   }
   if (node.type === 'action') {
     return [
-      { id: node.nextNodeId, label: '共通', connectionKind: 'next' },
+      { id: node.nextNodeId, label: '', connectionKind: 'next' },
       ...(node.conditionalNext ?? []).map((condition) => ({
         id: condition.nextNodeId,
         label: `条件: ${getBranchLabel?.(condition.branchId) ?? '選択肢'}`,
@@ -476,7 +477,8 @@ function splitDecisionFlowLabel(title: string) {
 }
 
 function formatDecisionFlowEdgeLabel(label: string, sourceIndex = 0, sourceCount = 1) {
-  const normalized = label.trim() || '分岐'
+  const normalized = label.trim()
+  if (!normalized) return ''
   const shortened = normalized.length > 14 ? `${normalized.slice(0, 13)}...` : normalized
   return sourceCount > 2 ? `${sourceIndex + 1}. ${shortened}` : shortened
 }
@@ -3313,11 +3315,13 @@ function App() {
                           >
                             <path className="decision-flow-edge-hit" d={edgePath} />
                             <path d={edgePath} markerEnd={`url(#${markerId})`} />
-                            <g className="decision-flow-edge-label">
-                              <title>{edge.label}</title>
-                              <rect height="22" rx="4" width={labelWidth} x={labelX} y={labelY} />
-                              <text x={labelX + 8} y={labelY + 15}>{edgeLabel}</text>
-                            </g>
+                            {edgeLabel && (
+                              <g className="decision-flow-edge-label">
+                                <title>{edge.label}</title>
+                                <rect height="22" rx="4" width={labelWidth} x={labelX} y={labelY} />
+                                <text x={labelX + 8} y={labelY + 15}>{edgeLabel}</text>
+                              </g>
+                            )}
                           </g>
                         )
                       })}
@@ -3326,9 +3330,10 @@ function App() {
                         const isStart = layoutNode.node.id === decisionStartNodeId
                         const isConnecting = layoutNode.node.id === connectingFromNodeId
                         const lines = splitDecisionFlowLabel(layoutNode.node.title)
+                        const attachmentCount = layoutNode.node.media?.length ?? 0
                         return (
                           <g
-                            aria-label={`${decisionNodeTypeLabels[layoutNode.node.type]}: ${layoutNode.node.title || '名称未設定'}`}
+                            aria-label={`${decisionNodeTypeLabels[layoutNode.node.type]}: ${layoutNode.node.title || '名称未設定'}${attachmentCount ? `、資料${attachmentCount}件` : ''}`}
                             className={`decision-flow-node ${layoutNode.node.type} ${isSelected ? 'selected' : ''} ${isStart ? 'start' : ''} ${isConnecting ? 'connecting-source' : ''}`}
                             key={layoutNode.node.id}
                             role="button"
@@ -3355,6 +3360,32 @@ function App() {
                                 {line}
                               </text>
                             ))}
+                            {attachmentCount > 0 && (
+                              <g className="decision-flow-attachment-mark">
+                                <title>{`資料 ${attachmentCount}件`}</title>
+                                <rect
+                                  height="24"
+                                  rx="5"
+                                  width="42"
+                                  x={layoutNode.x + decisionFlowChart.nodeWidth - 52}
+                                  y={layoutNode.y + 10}
+                                />
+                                <Paperclip
+                                  aria-hidden="true"
+                                  height="14"
+                                  width="14"
+                                  x={layoutNode.x + decisionFlowChart.nodeWidth - 46}
+                                  y={layoutNode.y + 15}
+                                />
+                                <text
+                                  className="decision-flow-attachment-count"
+                                  x={layoutNode.x + decisionFlowChart.nodeWidth - 16}
+                                  y={layoutNode.y + 27}
+                                >
+                                  {attachmentCount}
+                                </text>
+                              </g>
+                            )}
                           </g>
                         )
                       })}
