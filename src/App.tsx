@@ -2832,7 +2832,19 @@ function App() {
                               {node.media.map((media) => (
                                 <article key={media.id}>
                                   {media.kind === 'image' ? (
-                                    <img src={media.url} alt={media.name} />
+                                    <a
+                                      aria-label={`${media.name}を原寸で開く`}
+                                      className="decision-media-preview"
+                                      href={media.url}
+                                      rel="noreferrer"
+                                      target="_blank"
+                                    >
+                                      <img src={media.url} alt={media.name} />
+                                      <span>
+                                        <Eye size={15} aria-hidden="true" />
+                                        原寸を開く
+                                      </span>
+                                    </a>
                                   ) : (
                                     <video controls playsInline preload="metadata" src={media.url} />
                                   )}
