@@ -638,6 +638,7 @@ function App() {
   const [decisionChainTitles, setDecisionChainTitles] = useState('')
   const [decisionChainSourceId, setDecisionChainSourceId] = useState('')
   const [flowTool, setFlowTool] = useState<'select' | 'connect'>('select')
+  const [isFlowPanning, setIsFlowPanning] = useState(false)
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null)
   const [flowContextMenu, setFlowContextMenu] = useState<{
     nodeId?: string
@@ -669,6 +670,8 @@ function App() {
   const pendingViewerSeekRef = useRef<number | null>(null)
   const annotationSvgRef = useRef<SVGSVGElement | null>(null)
   const flowchartSvgRef = useRef<SVGSVGElement | null>(null)
+  const flowchartScrollRef = useRef<HTMLDivElement | null>(null)
+  const flowPanRef = useRef<{ startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null)
   const flowKeyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {})
   const flowDragRef = useRef<{
     nodeId: string
@@ -1216,7 +1219,28 @@ function App() {
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
+  const startFlowCanvasPan = (event: PointerEvent<SVGSVGElement>) => {
+    if (event.button !== 0 || event.target !== event.currentTarget) return
+    const scroll = flowchartScrollRef.current
+    if (!scroll) return
+    flowPanRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: scroll.scrollLeft,
+      scrollTop: scroll.scrollTop,
+    }
+    setIsFlowPanning(true)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
   const dragFlowNode = (event: PointerEvent<SVGSVGElement>) => {
+    const pan = flowPanRef.current
+    const scroll = flowchartScrollRef.current
+    if (pan && scroll) {
+      scroll.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX)
+      scroll.scrollTop = pan.scrollTop - (event.clientY - pan.startY)
+      return
+    }
     const drag = flowDragRef.current
     const point = getFlowPoint(event.clientX, event.clientY)
     if (!drag || !point) return
@@ -1235,6 +1259,16 @@ function App() {
 
   const stopFlowNodeDrag = () => {
     flowDragRef.current = null
+  }
+
+  const stopFlowCanvasPan = () => {
+    flowPanRef.current = null
+    setIsFlowPanning(false)
+  }
+
+  const stopFlowPointer = () => {
+    stopFlowNodeDrag()
+    stopFlowCanvasPan()
   }
 
   const handleFlowNodeClick = (nodeId: string, fromPointer = false) => {
@@ -3394,7 +3428,7 @@ function App() {
                       </div>
                     </div>
                   </div>
-                  <div className="decision-flowchart-scroll">
+                  <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef}>
                     <svg
                       aria-label="判断と処置のフローチャート"
                       height={decisionFlowChart.height}
@@ -3410,9 +3444,10 @@ function App() {
                       onContextMenu={(event) => {
                         openFlowCanvasContextMenu(event)
                       }}
-                      onPointerLeave={stopFlowNodeDrag}
+                      onPointerDown={startFlowCanvasPan}
                       onPointerMove={dragFlowNode}
-                      onPointerUp={stopFlowNodeDrag}
+                      onPointerLeave={stopFlowPointer}
+                      onPointerUp={stopFlowPointer}
                     >
                       <defs>
                         <marker id="decision-flow-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
