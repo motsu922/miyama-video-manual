@@ -2823,14 +2823,16 @@ function App() {
             </div>
           </div>
           <div className="manual-actions">
-            <button
-              className={`visibility-toggle-button ${isPublished ? 'to-draft' : 'to-published'}`}
-              type="button"
-              onClick={() => void toggleManualVisibility()}
-            >
-              {isPublished ? <RotateCcw size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
-              {isPublished ? '下書きに切替' : '公開に切替'}
-            </button>
+            {!isPublished && (
+              <button
+                className="visibility-toggle-button to-published"
+                type="button"
+                onClick={() => void toggleManualVisibility()}
+              >
+                <Eye size={17} aria-hidden="true" />
+                公開に切替
+              </button>
+            )}
             <button
               className={`manual-save-button ${hasUnsavedChanges ? 'needs-save' : ''}`}
               disabled={isEditingLocked}
