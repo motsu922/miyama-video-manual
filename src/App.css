@@ -1209,6 +1209,15 @@ textarea {
 
 .viewer-gallery {
   margin-top: 12px;
+  grid-template-columns: 1fr;
+}
+
+.viewer-gallery .inspection-image img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  background: #17202f;
 }
 
 .image-editor-backdrop {
@@ -3333,7 +3342,7 @@ textarea {
   border-color: #60a5fa;
 }
 
-.viewer-steps button {
+.viewer-steps > section > button {
   width: 100%;
   min-height: 42px;
   display: grid;
@@ -3348,13 +3357,13 @@ textarea {
   text-align: left;
 }
 
-.viewer-steps button:hover,
-.viewer-steps > section.active-viewer-step button {
+.viewer-steps > section > button:hover,
+.viewer-steps > section.active-viewer-step > button {
   border-color: #60a5fa;
   background: #eff6ff;
 }
 
-.viewer-steps button span:first-child {
+.viewer-steps > section > button span:first-child {
   width: 28px;
   height: 28px;
   display: grid;
@@ -3366,13 +3375,13 @@ textarea {
   font-weight: 800;
 }
 
-.viewer-steps button span:nth-child(2) {
+.viewer-steps > section > button span:nth-child(2) {
   color: #2563eb;
   font-size: 13px;
   font-weight: 800;
 }
 
-.viewer-steps button strong {
+.viewer-steps > section > button strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
