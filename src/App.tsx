@@ -887,38 +887,58 @@ function App() {
   }, [flashResults])
 
   useEffect(() => {
-    const unsubscribe = subscribeManuals(
-      (cloudManuals) => {
-        if (cloudManuals.length > 0) {
-          const normalizedCloudManuals = cloudManuals.map(normalizeManual)
-          const cloudManualIds = new Set(normalizedCloudManuals.map((manual) => manual.id))
-          cloudManualIds.forEach((id) => pendingManualIdsRef.current.delete(id))
-          setManuals((current) => {
-            const pendingManuals = current.filter(
-              (manual) => pendingManualIdsRef.current.has(manual.id) && !cloudManualIds.has(manual.id),
-            )
-            const mergedManuals = [...pendingManuals, ...normalizedCloudManuals]
-            setSelectedId((selectedId) =>
-              mergedManuals.some((manual) => manual.id === selectedId) ? selectedId : mergedManuals[0].id,
-            )
-            return mergedManuals
-          })
-          setFirebaseMessage('Firebase接続中: videoManuals を参照しています')
-          return
-        }
-        setManuals((current) => {
-          const pendingManuals = current.filter((manual) => pendingManualIdsRef.current.has(manual.id))
-          setSelectedId((selectedId) =>
-            pendingManuals.some((manual) => manual.id === selectedId) ? selectedId : (pendingManuals[0]?.id ?? ''),
-          )
-          return pendingManuals
-        })
-        setFirebaseMessage('Firebase接続中: 登録されたマニュアルはありません')
-      },
-      (message) => setFirebaseMessage(message),
-    )
+    let active = true
+    let unsubscribe: () => void = () => {}
 
-    return unsubscribe
+    setFirebaseMessage('Firebaseへ接続しています')
+    void ensureSignedIn()
+      .then(() => {
+        if (!active) return
+        unsubscribe = subscribeManuals(
+          (cloudManuals) => {
+            if (!active) return
+            if (cloudManuals.length > 0) {
+              const normalizedCloudManuals = cloudManuals.map(normalizeManual)
+              const cloudManualIds = new Set(normalizedCloudManuals.map((manual) => manual.id))
+              cloudManualIds.forEach((id) => pendingManualIdsRef.current.delete(id))
+              setManuals((current) => {
+                const pendingManuals = current.filter(
+                  (manual) => pendingManualIdsRef.current.has(manual.id) && !cloudManualIds.has(manual.id),
+                )
+                const mergedManuals = [...pendingManuals, ...normalizedCloudManuals]
+                setSelectedId((selectedId) =>
+                  mergedManuals.some((manual) => manual.id === selectedId) ? selectedId : mergedManuals[0].id,
+                )
+                return mergedManuals
+              })
+              setFirebaseMessage('Firebase接続中: videoManuals を参照しています')
+              return
+            }
+            setManuals((current) => {
+              const pendingManuals = current.filter((manual) => pendingManualIdsRef.current.has(manual.id))
+              setSelectedId((selectedId) =>
+                pendingManuals.some((manual) => manual.id === selectedId) ? selectedId : (pendingManuals[0]?.id ?? ''),
+              )
+              return pendingManuals
+            })
+            setFirebaseMessage('Firebase接続中: 登録されたマニュアルはありません')
+          },
+          (message) => active && setFirebaseMessage(message),
+        )
+      })
+      .catch((error) => {
+        if (!active) return
+        setFirebaseMessage(
+          error instanceof Error
+            ? `Firebase認証に失敗しました: ${error.message}`
+            : 'Firebase認証に失敗しました',
+        )
+      })
+
+    return () => {
+      active = false
+      unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
