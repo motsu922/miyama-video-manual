@@ -2802,6 +2802,18 @@ function App() {
             </div>
           </div>
           <div className="manual-actions">
+            <button
+              className={`manual-save-button ${hasUnsavedChanges ? 'needs-save' : ''}`}
+              disabled={isEditingLocked}
+              type="button"
+              onClick={persistSelectedManual}
+            >
+              <Save size={17} aria-hidden="true" />
+              手順書を保存
+            </button>
+            <span className={`top-save-status ${hasUnsavedChanges ? 'unsaved' : 'saved'}`} aria-live="polite">
+              {hasUnsavedChanges ? '未保存' : '保存済み'}
+            </span>
             {isPublished && (
               <button className="revision-button" type="button" onClick={beginRevision}>
                 <RotateCcw size={17} aria-hidden="true" />
