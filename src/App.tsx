@@ -4930,38 +4930,6 @@ function App() {
             <section className="decision-runner" aria-live="polite">
               {activeDecisionNode ? (
                 <>
-                  <div className="decision-runner-media-stage">
-                    {activeDecisionNode.media?.length ? (
-                      <section className="decision-runner-media" aria-label="この手順の参照資料">
-                      {activeDecisionNode.media.map((media) =>
-                        media.kind === 'image' ? (
-                          <figure key={media.id}>
-                            <button
-                              className="viewer-image-button"
-                              type="button"
-                              title="タップして全画面表示"
-                              aria-label={`${media.name}を全画面表示`}
-                              onClick={() => setFullscreenViewerImage({ src: media.url, alt: media.name })}
-                            >
-                              <img src={media.url} alt={media.name} />
-                              <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
-                            </button>
-                            <figcaption>{media.name}</figcaption>
-                          </figure>
-                        ) : (
-                          <figure key={media.id}>
-                            <video controls playsInline preload="metadata" src={media.url} />
-                            <figcaption>{media.name}</figcaption>
-                          </figure>
-                        ),
-                      )}
-                      </section>
-                    ) : (
-                      <div className="decision-runner-media-fallback">
-                        {selectedManual.thumbnail && <img src={selectedManual.thumbnail} alt="" />}
-                      </div>
-                    )}
-                  </div>
                   <div className="decision-runner-sheet">
                     <div className="decision-runner-progress">
                       <span>処置確認</span>
@@ -4977,57 +4945,99 @@ function App() {
                         最初に戻る
                       </button>
                     </div>
-                    <span className={`decision-type large ${activeDecisionNode.type}`}>
-                      {decisionNodeTypeLabels[activeDecisionNode.type]}
-                    </span>
-                    <h2>{activeDecisionNode.title || '名称未設定'}</h2>
-                    <p>{activeDecisionNode.detail || '現場への指示を入力してください。'}</p>
+                    <section className="decision-runner-content" aria-labelledby="decision-current-title">
+                      <span className="decision-runner-section-label">作業内容</span>
+                      <span className={`decision-type large ${activeDecisionNode.type}`}>
+                        {decisionNodeTypeLabels[activeDecisionNode.type]}
+                      </span>
+                      <h2 id="decision-current-title">{activeDecisionNode.title || '名称未設定'}</h2>
+                    </section>
+                    <section className="decision-runner-instruction">
+                      <span className="decision-runner-section-label">作業指示</span>
+                      <p>{activeDecisionNode.detail || '現場への指示を入力してください。'}</p>
+                    </section>
+                    <div className="decision-runner-media-stage">
+                      <span className="decision-runner-section-label">写真・動画</span>
+                      {activeDecisionNode.media?.length ? (
+                        <section className="decision-runner-media" aria-label="この手順の参照資料">
+                          {activeDecisionNode.media.map((media) =>
+                            media.kind === 'image' ? (
+                              <figure key={media.id}>
+                                <button
+                                  className="viewer-image-button"
+                                  type="button"
+                                  title="タップして全画面表示"
+                                  aria-label={`${media.name}を全画面表示`}
+                                  onClick={() => setFullscreenViewerImage({ src: media.url, alt: media.name })}
+                                >
+                                  <img src={media.url} alt={media.name} />
+                                  <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
+                                </button>
+                                <figcaption>{media.name}</figcaption>
+                              </figure>
+                            ) : (
+                              <figure key={media.id}>
+                                <video controls playsInline preload="metadata" src={media.url} />
+                                <figcaption>{media.name}</figcaption>
+                              </figure>
+                            ),
+                          )}
+                        </section>
+                      ) : (
+                        <div className="decision-runner-media-empty">添付された写真・動画はありません</div>
+                      )}
+                    </div>
                     {decisionSelections.length > 0 && (
                       <div className="decision-route-context">
                         <span>引継ぎ中の選択</span>
                         <strong>{decisionSelections.map((selection) => selection.label).join(' / ')}</strong>
                       </div>
                     )}
-                    {activeDecisionNode.type === 'question' && (
-                      <div className="decision-answer-actions">
-                        {getDecisionBranches(activeDecisionNode).map((branch) => (
-                          <button
-                            className={`decision-answer ${branch.label.toLowerCase()}`}
-                            key={branch.id}
-                            type="button"
-                            onClick={() => advanceDecision(branch.nextNodeId, { branchId: branch.id, label: branch.label || '選択肢' })}
-                          >
-                            {branch.label || '選択してください'}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {activeDecisionNode.type === 'action' && (
-                      (() => {
-                        const actionNext = getDecisionActionNext(activeDecisionNode)
-                        return (
-                          <>
-                            {actionNext.matchedSelection && (
-                              <small className="decision-conditional-note">
-                                「{actionNext.matchedSelection.label}」の選択に応じた次の処置へ進みます
-                              </small>
-                            )}
-                            <button className="decision-next-action" type="button" onClick={() => advanceDecision(actionNext.nextNodeId)}>
-                              処置を実施した。次へ進む
+                    <section className="decision-runner-next">
+                      <span className="decision-runner-section-label">
+                        {activeDecisionNode.type === 'end' ? '完了' : '次の分岐'}
+                      </span>
+                      {activeDecisionNode.type === 'question' && (
+                        <div className="decision-answer-actions">
+                          {getDecisionBranches(activeDecisionNode).map((branch) => (
+                            <button
+                              className={`decision-answer ${branch.label.toLowerCase()}`}
+                              key={branch.id}
+                              type="button"
+                              onClick={() => advanceDecision(branch.nextNodeId, { branchId: branch.id, label: branch.label || '選択肢' })}
+                            >
+                              {branch.label || '選択してください'}
                             </button>
-                          </>
-                        )
-                      })()
-                    )}
-                    {activeDecisionNode.type === 'end' && (
-                      <div className="decision-complete-state">
-                        <CheckCircle2 size={30} aria-hidden="true" />
-                        <strong>処置フローを完了しました</strong>
-                        <button type="button" onClick={resetDecisionReview}>
-                          最初から確認する
-                        </button>
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                      {activeDecisionNode.type === 'action' && (
+                        (() => {
+                          const actionNext = getDecisionActionNext(activeDecisionNode)
+                          return (
+                            <>
+                              {actionNext.matchedSelection && (
+                                <small className="decision-conditional-note">
+                                  「{actionNext.matchedSelection.label}」の選択に応じた次の処置へ進みます
+                                </small>
+                              )}
+                              <button className="decision-next-action" type="button" onClick={() => advanceDecision(actionNext.nextNodeId)}>
+                                処置を実施した。次へ進む
+                              </button>
+                            </>
+                          )
+                        })()
+                      )}
+                      {activeDecisionNode.type === 'end' && (
+                        <div className="decision-complete-state">
+                          <CheckCircle2 size={30} aria-hidden="true" />
+                          <strong>処置フローを完了しました</strong>
+                          <button type="button" onClick={resetDecisionReview}>
+                            最初から確認する
+                          </button>
+                        </div>
+                      )}
+                    </section>
                   </div>
                 </>
               ) : (
