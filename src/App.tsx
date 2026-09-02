@@ -1226,8 +1226,8 @@ function App() {
 
     const nodeWidth = decisionFlowChart.nodeWidth
     const nodeHeight = decisionFlowChart.nodeHeight
-    const columnGap = 92
-    const rowGap = 42
+    const columnGap = 170
+    const rowGap = 64
     const nextPositions = new Map<string, { x: number; y: number }>()
     ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([depth, nodeIds]) => {
       nodeIds.forEach((nodeId, index) => {
