@@ -61,99 +61,31 @@ import {
 import { translateManualContent } from './translationRepository'
 import type { ApprovalEvent, ApprovalStatus, DecisionNode, DecisionNodeType, FlashTestResult, InspectionImage, InspectionImageKind, Manual, ManualImage, ManualLanguage, ReviewCheck, Step, VideoClip } from './types'
 
-const initialManuals: Manual[] = [
-  {
-    id: 'M-1024',
-    title: '塗装ライン立ち上げ手順',
-    workName: '塗装ライン立ち上げ検査',
-    controlNo: 'INS-2026-001',
-    productName: 'コーティング部品A',
-    department: '製造1課',
-    owner: '杉本',
-    status: 'review',
-    version: 'v1.3',
-    duration: '08:42',
-    updatedAt: '2026-08-03',
-    videoUrl: '',
-    thumbnail:
-      'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1200&q=80',
-    tags: ['日常点検', '新入社員', '安全'],
-    reviewers: ['班長', '品質保証'],
-    checks: [
-      { id: 'safety', label: '安全注意を冒頭に表示', checked: true },
-      { id: 'viewer', label: '視聴確認を必須化', checked: true },
-      { id: 'history', label: '改訂履歴を保存', checked: true },
-    ],
-    approvalHistory: [
-      { id: 'created-1024', action: 'created', actor: '杉本', createdAt: '2026-08-01T09:00:00' },
-      { id: 'submitted-1024', action: 'submitted', actor: '杉本', createdAt: '2026-08-03T10:30:00' },
-    ],
-    inspectionImages: [],
-    steps: [
-      {
-        id: 1,
-        time: '00:00',
-        title: '保護具と周辺確認',
-        detail: '手袋、保護メガネ、換気状態を確認してから開始します。',
-      },
-      {
-        id: 2,
-        time: '01:35',
-        title: '設備電源投入',
-        detail: '主電源、制御盤、非常停止解除の順で確認します。',
-      },
-      {
-        id: 3,
-        time: '04:20',
-        title: '試し吹きと条件記録',
-        detail: '圧力、粘度、ノズル距離を記録し、異常があれば停止します。',
-      },
-    ],
-  },
-  {
-    id: 'M-0988',
-    title: '異常発生時の初動連絡',
-    workName: '外観異常の初動確認',
-    controlNo: 'INS-2026-002',
-    productName: '検査対象品',
-    department: '品質保証',
-    owner: '山田',
-    status: 'published',
-    version: 'v2.0',
-    duration: '05:18',
-    updatedAt: '2026-07-28',
-    videoUrl: '',
-    thumbnail:
-      'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
-    tags: ['異常対応', '報告', '承認済み'],
-    reviewers: ['課長', '工場長'],
-    checks: [
-      { id: 'contacts', label: '連絡先の最新版反映', checked: true },
-      { id: 'qr', label: 'QR閲覧に対応', checked: true },
-      { id: 'log', label: '承認ログ保存', checked: true },
-    ],
-    approvalHistory: [
-      { id: 'created-0988', action: 'created', actor: '山田', createdAt: '2026-07-22T09:00:00' },
-      { id: 'approved-0988', action: 'approved', actor: '品質保証', createdAt: '2026-07-27T14:30:00' },
-      { id: 'published-0988', action: 'published', actor: '品質保証', createdAt: '2026-07-28T08:15:00' },
-    ],
-    inspectionImages: [],
-    steps: [
-      {
-        id: 1,
-        time: '00:00',
-        title: '現品を隔離',
-        detail: '対象ロットと周辺在庫を識別して、使用停止ラベルを貼ります。',
-      },
-      {
-        id: 2,
-        time: '02:10',
-        title: '一次報告',
-        detail: '発見者、日時、現象、数量を異常履歴へ入力します。',
-      },
-    ],
-  },
-]
+const emptyManual: Manual = {
+  id: '',
+  title: '',
+  workName: '',
+  controlNo: '',
+  productName: '',
+  department: '',
+  owner: '',
+  status: 'draft',
+  version: 'v0.1',
+  duration: '00:00',
+  updatedAt: '',
+  videoUrl: '',
+  manualImages: [],
+  thumbnail: '',
+  tags: [],
+  kind: 'standard',
+  reviewers: [],
+  checks: [],
+  approvalHistory: [],
+  inspectionImages: [],
+  steps: [],
+}
+
+const initialManuals: Manual[] = []
 
 const statusLabels: Record<ApprovalStatus, string> = {
   draft: '下書き',
@@ -697,7 +629,7 @@ async function composeAnnotatedImage(pending: PendingInspectionImage) {
 
 function App() {
   const [manuals, setManuals] = useState(initialManuals)
-  const [selectedId, setSelectedId] = useState(initialManuals[0].id)
+  const [selectedId, setSelectedId] = useState('')
   const [view, setView] = useState<'edit' | 'approval' | 'library' | 'flash' | 'decision'>('edit')
   const [query, setQuery] = useState('')
   const [isUploading, setIsUploading] = useState(false)
@@ -780,7 +712,7 @@ function App() {
   const [firebaseMessage, setFirebaseMessage] = useState(
     isFirebaseConfigured
       ? 'Firebase接続を確認しています'
-      : 'Firebase未設定: サンプルデータで表示しています',
+      : 'Firebase未設定: 接続設定を確認してください',
   )
 
   useEffect(() => {
@@ -797,7 +729,7 @@ function App() {
     }
   }, [fullscreenViewerImage])
 
-  const selectedManual = manuals.find((manual) => manual.id === selectedId) ?? manuals[0] ?? initialManuals[0]
+  const selectedManual = manuals.find((manual) => manual.id === selectedId) ?? manuals[0] ?? emptyManual
   const selectedManualRef = useRef(selectedManual)
   selectedManualRef.current = selectedManual
   const hasUnsavedChanges = dirtyManualIds.has(selectedManual.id)
@@ -974,7 +906,14 @@ function App() {
           setFirebaseMessage('Firebase接続中: videoManuals を参照しています')
           return
         }
-        setFirebaseMessage('Firebase接続中: videoManuals は空のためサンプルを表示しています')
+        setManuals((current) => {
+          const pendingManuals = current.filter((manual) => pendingManualIdsRef.current.has(manual.id))
+          setSelectedId((selectedId) =>
+            pendingManuals.some((manual) => manual.id === selectedId) ? selectedId : (pendingManuals[0]?.id ?? ''),
+          )
+          return pendingManuals
+        })
+        setFirebaseMessage('Firebase接続中: 登録されたマニュアルはありません')
       },
       (message) => setFirebaseMessage(message),
     )
@@ -1021,6 +960,8 @@ function App() {
     let active = true
     let unsubscribe: () => void = () => {}
     setFlashResults([])
+
+    if (!selectedManual.id) return unsubscribe
 
     void ensureSignedIn()
       .then(() => {
@@ -2992,7 +2933,7 @@ function App() {
       await deleteManual(selectedManual.id)
       const remainingManuals = manuals.filter((manual) => manual.id !== selectedManual.id)
       setManuals(remainingManuals)
-      setSelectedId(remainingManuals[0]?.id ?? initialManuals[0].id)
+      setSelectedId(remainingManuals[0]?.id ?? '')
       setView('edit')
       setFirebaseMessage(`マニュアルを削除しました: ${selectedManual.id}`)
     } catch (error) {
@@ -3034,7 +2975,13 @@ function App() {
               type="button"
               onClick={() => selectManual(manual.id)}
             >
-              <img src={manual.thumbnail} alt="" />
+              {manual.thumbnail ? (
+                <img src={manual.thumbnail} alt="" />
+              ) : (
+                <span className="manual-thumbnail-empty" aria-hidden="true">
+                  <FileVideo size={18} />
+                </span>
+              )}
               <span>
                 <strong>{manual.title}</strong>
                 <small>
@@ -3162,15 +3109,22 @@ function App() {
                     )}
                   </div>
                 ) : (
-                  <>
-                    <img
-                      src={selectedManual.thumbnail}
-                      alt={`${selectedManual.title}のサムネイル`}
-                    />
-                    <button type="button" className="play-button" aria-label="動画を再生">
-                      <PlayCircle size={54} aria-hidden="true" />
-                    </button>
-                  </>
+                  selectedManual.thumbnail ? (
+                    <>
+                      <img
+                        src={selectedManual.thumbnail}
+                        alt={`${selectedManual.title}のサムネイル`}
+                      />
+                      <button type="button" className="play-button" aria-label="動画を再生">
+                        <PlayCircle size={54} aria-hidden="true" />
+                      </button>
+                    </>
+                  ) : (
+                    <div className="video-empty-state">
+                      <FileVideo size={34} aria-hidden="true" />
+                      <span>動画・写真は未登録です</span>
+                    </div>
+                  )
                 )}
                 {activeStep && (
                   <div className="step-overlay">
@@ -4676,16 +4630,23 @@ function App() {
                     )}
                   </div>
                 ) : (
-                  <button
-                    className="viewer-image-button viewer-main-image-button"
-                    type="button"
-                    title="タップして全画面表示"
-                    aria-label="タイトル写真を全画面表示"
-                    onClick={() => setFullscreenViewerImage({ src: selectedManual.thumbnail, alt: selectedManual.title })}
-                  >
-                    <img src={selectedManual.thumbnail} alt="" />
-                    <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
-                  </button>
+                  selectedManual.thumbnail ? (
+                    <button
+                      className="viewer-image-button viewer-main-image-button"
+                      type="button"
+                      title="タップして全画面表示"
+                      aria-label="タイトル写真を全画面表示"
+                      onClick={() => setFullscreenViewerImage({ src: selectedManual.thumbnail, alt: selectedManual.title })}
+                    >
+                      <img src={selectedManual.thumbnail} alt="" />
+                      <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
+                    </button>
+                  ) : (
+                    <div className="viewer-media-empty">
+                      <FileVideo size={30} aria-hidden="true" />
+                      <span>動画・写真は未登録です</span>
+                    </div>
+                  )
                 )}
                 <div>
                   <p>
