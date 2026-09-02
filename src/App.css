@@ -833,12 +833,6 @@ h2 {
   background: #f0fdf4;
 }
 
-.visibility-toggle-button.to-draft {
-  border-color: #fed7aa;
-  color: #9a3412;
-  background: #fff7ed;
-}
-
 .manual-save-button {
   min-height: 42px;
   display: inline-flex;
