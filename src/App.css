@@ -3229,16 +3229,31 @@ textarea {
 }
 
 @media print {
+  html,
+  body {
+    width: 100%;
+    height: 190mm;
+    overflow: hidden;
+  }
+
+  body[data-print-mode='flowchart'] #root,
+  body[data-print-mode='qr'] #root {
+    position: relative;
+    width: 100%;
+    height: 190mm;
+    overflow: hidden;
+  }
+
   body * {
     visibility: hidden;
   }
 
-  #manual-qr-panel,
-  #manual-qr-panel * {
+  body[data-print-mode='qr'] #manual-qr-panel,
+  body[data-print-mode='qr'] #manual-qr-panel * {
     visibility: visible;
   }
 
-  #manual-qr-panel {
+  body[data-print-mode='qr'] #manual-qr-panel {
     position: absolute;
     inset: 24mm auto auto 24mm;
     width: 110mm;
@@ -3246,16 +3261,16 @@ textarea {
     box-shadow: none;
   }
 
-  #decision-flowchart-print,
-  #decision-flowchart-print * {
+  body[data-print-mode='flowchart'] #decision-flowchart-print,
+  body[data-print-mode='flowchart'] #decision-flowchart-print * {
     visibility: visible;
   }
 
-  #decision-flowchart-print {
+  body[data-print-mode='flowchart'] #decision-flowchart-print {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
+    width: 277mm;
     height: 190mm;
     overflow: hidden;
     box-sizing: border-box;
@@ -3267,13 +3282,13 @@ textarea {
     page-break-after: avoid;
   }
 
-  #decision-flowchart-print .print-flowchart-button,
-  #decision-flowchart-print .decision-flowchart-tools .decision-flow-tool-group,
-  #decision-flowchart-print .decision-flowchart-tools > span {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .print-flowchart-button,
+  body[data-print-mode='flowchart'] #decision-flowchart-print .decision-flowchart-tools .decision-flow-tool-group,
+  body[data-print-mode='flowchart'] #decision-flowchart-print .decision-flowchart-tools > span {
     display: none;
   }
 
-  #decision-flowchart-print .decision-flowchart-heading {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .decision-flowchart-heading {
     position: static;
     display: block;
     height: 13mm;
@@ -3283,7 +3298,7 @@ textarea {
     box-shadow: none;
   }
 
-  #decision-flowchart-print .flowchart-print-header {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .flowchart-print-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 160px;
     align-items: center;
@@ -3295,26 +3310,26 @@ textarea {
     box-sizing: border-box;
   }
 
-  #decision-flowchart-print .flowchart-print-header p {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .flowchart-print-header p {
     margin-bottom: 4px;
     color: #2563eb;
     font-size: 12px;
     font-weight: 800;
   }
 
-  #decision-flowchart-print .flowchart-print-header h1 {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .flowchart-print-header h1 {
     color: #17202f;
     font-size: 24px;
   }
 
-  #decision-flowchart-print .flowchart-print-header img {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .flowchart-print-header img {
     width: 160px;
     height: 90px;
     object-fit: cover;
     border-radius: 4px;
   }
 
-  #decision-flowchart-print .decision-flowchart-heading::after {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .decision-flowchart-heading::after {
     display: block;
     margin-top: 4px;
     color: #17202f;
@@ -3323,7 +3338,7 @@ textarea {
     font-weight: 800;
   }
 
-  #decision-flowchart-print .decision-flowchart-scroll {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .decision-flowchart-scroll {
     height: 143mm;
     overflow: visible;
     border: 1px solid #cbd5e1;
@@ -3332,7 +3347,7 @@ textarea {
     box-sizing: border-box;
   }
 
-  #decision-flowchart-print .decision-flowchart-scroll > svg {
+  body[data-print-mode='flowchart'] #decision-flowchart-print .decision-flowchart-scroll > svg {
     width: 100%;
     min-width: 0;
     height: 142mm;
