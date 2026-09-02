@@ -3252,13 +3252,19 @@ textarea {
   }
 
   #decision-flowchart-print {
-    position: static;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
+    height: 190mm;
+    overflow: hidden;
+    box-sizing: border-box;
     border: 0;
     padding: 0;
     box-shadow: none;
     break-inside: avoid;
     page-break-inside: avoid;
+    page-break-after: avoid;
   }
 
   #decision-flowchart-print .print-flowchart-button,
@@ -3270,7 +3276,8 @@ textarea {
   #decision-flowchart-print .decision-flowchart-heading {
     position: static;
     display: block;
-    margin-bottom: 10px;
+    height: 13mm;
+    margin-bottom: 2mm;
     padding: 0;
     border-bottom: 0;
     box-shadow: none;
@@ -3281,9 +3288,11 @@ textarea {
     grid-template-columns: minmax(0, 1fr) 160px;
     align-items: center;
     gap: 18px;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
+    height: 28mm;
+    margin-bottom: 4mm;
+    padding-bottom: 3mm;
     border-bottom: 2px solid #17202f;
+    box-sizing: border-box;
   }
 
   #decision-flowchart-print .flowchart-print-header p {
@@ -3315,22 +3324,23 @@ textarea {
   }
 
   #decision-flowchart-print .decision-flowchart-scroll {
+    height: 143mm;
     overflow: visible;
     border: 1px solid #cbd5e1;
     break-inside: avoid;
     page-break-inside: avoid;
+    box-sizing: border-box;
   }
 
   #decision-flowchart-print .decision-flowchart-scroll > svg {
     width: 100%;
     min-width: 0;
-    height: auto;
-    max-height: 175mm;
+    height: 142mm;
     object-fit: contain;
   }
 
   @page {
-    size: landscape;
+    size: A4 landscape;
     margin: 10mm;
   }
 
