@@ -1653,6 +1653,10 @@ function App() {
   }
 
   const removeDecisionMedia = async (nodeId: string, mediaId: string) => {
+    const targetNode = decisionNodes.find((node) => node.id === nodeId)
+    const targetMedia = targetNode?.media?.find((media) => media.id === mediaId)
+    if (!targetMedia || !window.confirm(`「${targetMedia.name}」を削除しますか？`)) return
+
     const updatedNodes = decisionNodes.map((node) =>
       node.id === nodeId ? { ...node, media: (node.media ?? []).filter((media) => media.id !== mediaId) } : node,
     )
@@ -2093,9 +2097,27 @@ function App() {
     }
   }
 
-  const removeManualImage = (imageId: string) => {
-    updateManual({ manualImages: (selectedManual.manualImages ?? []).filter((image) => image.id !== imageId) })
-    setFirebaseMessage('写真を一覧から外しました。Firebaseへ保存すると反映されます。')
+  const removeManualImage = async (imageId: string) => {
+    const targetImage = selectedManual.manualImages?.find((image) => image.id === imageId)
+    if (!targetImage || !window.confirm(`「${targetImage.name}」を削除しますか？`)) return
+
+    const manualImages = (selectedManual.manualImages ?? []).filter((image) => image.id !== imageId)
+    const updatedManual: Manual = {
+      ...selectedManual,
+      manualImages,
+      thumbnail: selectedManual.thumbnail === targetImage.url ? (manualImages[0]?.url ?? '') : selectedManual.thumbnail,
+      updatedAt: new Date().toISOString().slice(0, 10),
+    }
+    setManuals((current) =>
+      current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)),
+    )
+    try {
+      await saveManual(updatedManual)
+      markManualSaved(updatedManual.id)
+      setFirebaseMessage('写真を削除しました')
+    } catch (error) {
+      setFirebaseMessage(error instanceof Error ? `写真の削除失敗: ${error.message}` : '写真の削除に失敗しました')
+    }
   }
 
   const handleClipUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2215,6 +2237,32 @@ function App() {
       })
       setFirebaseMessage(`${imageKindLabels[kind]}を編集中: ${file.name}`)
     }
+
+  const removeInspectionImage = async (stepId: number, imageId: string) => {
+    const step = selectedManual.steps.find((item) => item.id === stepId)
+    const targetImage = step?.inspectionImages?.find((image) => image.id === imageId)
+    if (!targetImage || !window.confirm(`「${targetImage.name}」を削除しますか？`)) return
+
+    const updatedManual: Manual = {
+      ...selectedManual,
+      steps: selectedManual.steps.map((item) =>
+        item.id === stepId
+          ? { ...item, inspectionImages: (item.inspectionImages ?? []).filter((image) => image.id !== imageId) }
+          : item,
+      ),
+      updatedAt: new Date().toISOString().slice(0, 10),
+    }
+    setManuals((current) =>
+      current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)),
+    )
+    try {
+      await saveManual(updatedManual)
+      markManualSaved(updatedManual.id)
+      setFirebaseMessage('検査画像を削除しました')
+    } catch (error) {
+      setFirebaseMessage(error instanceof Error ? `検査画像の削除失敗: ${error.message}` : '検査画像の削除に失敗しました')
+    }
+  }
 
   const addAnnotation = (kind: AnnotationKind) => {
     const id = `${kind}-${Date.now()}`
@@ -3225,7 +3273,7 @@ function App() {
                           disabled={isEditingLocked}
                           title="写真を削除"
                           type="button"
-                          onClick={() => removeManualImage(image.id)}
+                          onClick={() => void removeManualImage(image.id)}
                         >
                           <Trash2 size={16} aria-hidden="true" />
                         </button>
@@ -3613,6 +3661,16 @@ function App() {
                             <img src={image.url} alt={image.name} />
                             <span>{imageKindLabels[image.kind]}</span>
                             <strong>{image.name}</strong>
+                            <button
+                              aria-label={`${image.name}を削除`}
+                              className="inspection-image-delete"
+                              disabled={isEditingLocked}
+                              title="検査画像を削除"
+                              type="button"
+                              onClick={() => void removeInspectionImage(step.id, image.id)}
+                            >
+                              <Trash2 size={15} aria-hidden="true" />
+                            </button>
                           </article>
                         ))}
                       </div>
@@ -4105,6 +4163,35 @@ function App() {
                           />
                         </label>
                       </div>
+                      {(editingDecisionNode.media?.length ?? 0) > 0 && (
+                        <section className="decision-flow-quick-media" aria-label="カードの添付資料">
+                          <header>
+                            <strong>添付資料</strong>
+                            <span>{editingDecisionNode.media?.length ?? 0} 件</span>
+                          </header>
+                          <div className="decision-flow-quick-media-list">
+                            {(editingDecisionNode.media ?? []).map((media) => (
+                              <article key={media.id}>
+                                {media.kind === 'image' ? (
+                                  <img src={media.url} alt={media.name} />
+                                ) : (
+                                  <video playsInline preload="metadata" src={media.url} />
+                                )}
+                                <strong title={media.name}>{media.name}</strong>
+                                <button
+                                  aria-label={`${media.name}を削除`}
+                                  disabled={isEditingLocked}
+                                  title="添付資料を削除"
+                                  type="button"
+                                  onClick={() => void removeDecisionMedia(editingDecisionNode.id, media.id)}
+                                >
+                                  <Trash2 size={15} aria-hidden="true" />
+                                </button>
+                              </article>
+                            ))}
+                          </div>
+                        </section>
+                      )}
                       <div className="decision-flow-quick-actions">
                         <button
                           className={editingDecisionNode.id === decisionStartNodeId ? 'active' : ''}
