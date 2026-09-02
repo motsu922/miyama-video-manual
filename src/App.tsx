@@ -325,6 +325,15 @@ type DecisionSelection = {
   label: string
 }
 
+type DecisionFlowEdgeGeometry = {
+  startX: number
+  startY: number
+  turnX: number
+  endX: number
+  endY: number
+  goesForward: boolean
+}
+
 function getDecisionTargets(node: DecisionNode, getBranchLabel?: (branchId: string) => string): DecisionFlowTarget[] {
   if (node.type === 'question') {
     return getDecisionBranches(node).map((branch) => ({
@@ -467,6 +476,73 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
   })
 
   return { edges, height, nodeHeight, nodeWidth, nodes: layoutNodes, width }
+}
+
+function getDecisionFlowPortOffset(index: number, count: number) {
+  if (count <= 1) return 0
+  const spacing = Math.min(18, 52 / (count - 1))
+  return (index - (count - 1) / 2) * spacing
+}
+
+function getDecisionFlowEdgeGeometry(
+  edge: DecisionFlowEdge,
+  nodeWidth: number,
+  nodeHeight: number,
+): DecisionFlowEdgeGeometry {
+  const startX = edge.from.x + nodeWidth
+  const startY = edge.from.y + nodeHeight / 2 + getDecisionFlowPortOffset(edge.sourceIndex, edge.sourceCount)
+  const endX = edge.to.x
+  const endY = edge.to.y + nodeHeight / 2 + getDecisionFlowPortOffset(edge.targetIndex, edge.targetCount)
+  const goesForward = endX > startX
+  const laneOffset = getDecisionFlowPortOffset(edge.sourceIndex, edge.sourceCount) * 1.2
+  const baseTurnX = goesForward ? (startX + endX) / 2 : Math.max(startX, endX) + 44
+  const turnX = goesForward
+    ? Math.max(startX + 24, Math.min(endX - 24, Math.round(baseTurnX + laneOffset)))
+    : Math.round(baseTurnX + laneOffset)
+  return { startX, startY, turnX, endX, endY, goesForward }
+}
+
+function getDistanceToDecisionEdge(
+  edge: DecisionFlowEdge,
+  nodeWidth: number,
+  nodeHeight: number,
+  point: { x: number; y: number },
+) {
+  const { startX, startY, turnX, endX, endY } = getDecisionFlowEdgeGeometry(edge, nodeWidth, nodeHeight)
+  const segments = [
+    { x1: startX, y1: startY, x2: turnX, y2: startY },
+    { x1: turnX, y1: startY, x2: turnX, y2: endY },
+    { x1: turnX, y1: endY, x2: endX, y2: endY },
+  ]
+  return Math.min(...segments.map((segment) => {
+    if (segment.y1 === segment.y2) {
+      const nearestX = Math.max(Math.min(segment.x1, segment.x2), Math.min(point.x, Math.max(segment.x1, segment.x2)))
+      return Math.hypot(point.x - nearestX, point.y - segment.y1)
+    }
+    const nearestY = Math.max(Math.min(segment.y1, segment.y2), Math.min(point.y, Math.max(segment.y1, segment.y2)))
+    return Math.hypot(point.x - segment.x1, point.y - nearestY)
+  }))
+}
+
+function doesDecisionEdgeIntersectNode(
+  edge: DecisionFlowEdge,
+  nodeWidth: number,
+  nodeHeight: number,
+  position: { x: number; y: number },
+) {
+  const { startX, startY, turnX, endX, endY } = getDecisionFlowEdgeGeometry(edge, nodeWidth, nodeHeight)
+  const padding = 10
+  const left = position.x - padding
+  const right = position.x + nodeWidth + padding
+  const top = position.y - padding
+  const bottom = position.y + nodeHeight + padding
+  const horizontalIntersects = (x1: number, x2: number, y: number) =>
+    y >= top && y <= bottom && Math.max(Math.min(x1, x2), left) <= Math.min(Math.max(x1, x2), right)
+  const verticalIntersects = (x: number, y1: number, y2: number) =>
+    x >= left && x <= right && Math.max(Math.min(y1, y2), top) <= Math.min(Math.max(y1, y2), bottom)
+  return horizontalIntersects(startX, turnX, startY)
+    || verticalIntersects(turnX, startY, endY)
+    || horizontalIntersects(turnX, endX, endY)
 }
 
 function splitDecisionFlowLabel(title: string) {
@@ -690,6 +766,8 @@ function App() {
     startY: number
     originX: number
     originY: number
+    currentX: number
+    currentY: number
     moved: boolean
   } | null>(null)
   const suppressFlowClickRef = useRef(false)
@@ -1292,6 +1370,8 @@ function App() {
       startY: point.y,
       originX: layoutNode.x,
       originY: layoutNode.y,
+      currentX: layoutNode.x,
+      currentY: layoutNode.y,
       moved: false,
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -1327,16 +1407,98 @@ function App() {
     if (!drag.moved && Math.abs(deltaX) + Math.abs(deltaY) < 3) return
     drag.moved = true
     suppressFlowClickRef.current = true
+    drag.currentX = Math.max(20, Math.round(drag.originX + deltaX))
+    drag.currentY = Math.max(20, Math.round(drag.originY + deltaY))
     updateDecisionNode(drag.nodeId, {
       flowPosition: {
-        x: Math.max(20, Math.round(drag.originX + deltaX)),
-        y: Math.max(20, Math.round(drag.originY + deltaY)),
+        x: drag.currentX,
+        y: drag.currentY,
       },
     })
   }
 
+  const insertIndependentNodeOnEdge = (nodeId: string, edge: DecisionFlowEdge) => {
+    const insertedNode = decisionNodeMap.get(nodeId)
+    const sourceNode = decisionNodeMap.get(edge.from.node.id)
+    if (!insertedNode || !sourceNode || insertedNode.type === 'end') return
+
+    const updateSourceTarget = (node: DecisionNode) => {
+      if (edge.connectionKind === 'branch' && edge.branchId) {
+        return {
+          ...node,
+          branches: getDecisionBranches(node).map((branch) =>
+            branch.id === edge.branchId ? { ...branch, nextNodeId: nodeId } : branch,
+          ),
+        }
+      }
+      if (edge.connectionKind === 'conditional' && edge.branchId) {
+        return {
+          ...node,
+          conditionalNext: (node.conditionalNext ?? []).map((condition) =>
+            condition.branchId === edge.branchId ? { ...condition, nextNodeId: nodeId } : condition,
+          ),
+        }
+      }
+      return { ...node, nextNodeId: nodeId }
+    }
+
+    const updateInsertedTarget = (node: DecisionNode) => {
+      if (node.type === 'action') return { ...node, nextNodeId: edge.to.node.id }
+      const branches = getDecisionBranches(node)
+      const branchIndex = Math.max(0, branches.findIndex((branch) => !branch.nextNodeId))
+      return {
+        ...node,
+        branches: branches.map((branch, index) =>
+          index === branchIndex ? { ...branch, nextNodeId: edge.to.node.id } : branch,
+        ),
+      }
+    }
+
+    updateManual({
+      decisionNodes: decisionNodes.map((node) => {
+        if (node.id === edge.from.node.id) return updateSourceTarget(node)
+        if (node.id === nodeId) return updateInsertedTarget(node)
+        return node
+      }),
+    })
+    setFirebaseMessage(`「${insertedNode.title || '名称未設定'}」をカード間に接続しました`)
+  }
+
   const stopFlowNodeDrag = () => {
+    const drag = flowDragRef.current
     flowDragRef.current = null
+    if (!drag?.moved) return
+
+    const movedNode = decisionNodeMap.get(drag.nodeId)
+    if (!movedNode || movedNode.type === 'end') return
+    const isIndependent = !decisionFlowChart.edges.some(
+      (edge) => edge.from.node.id === drag.nodeId || edge.to.node.id === drag.nodeId,
+    )
+    if (!isIndependent) return
+
+    const position = { x: drag.currentX, y: drag.currentY }
+    const center = {
+      x: position.x + decisionFlowChart.nodeWidth / 2,
+      y: position.y + decisionFlowChart.nodeHeight / 2,
+    }
+    const edge = decisionFlowChart.edges
+      .filter((candidate) => doesDecisionEdgeIntersectNode(
+        candidate,
+        decisionFlowChart.nodeWidth,
+        decisionFlowChart.nodeHeight,
+        position,
+      ))
+      .sort((left, right) =>
+        getDistanceToDecisionEdge(left, decisionFlowChart.nodeWidth, decisionFlowChart.nodeHeight, center)
+        - getDistanceToDecisionEdge(right, decisionFlowChart.nodeWidth, decisionFlowChart.nodeHeight, center),
+      )[0]
+    if (!edge) return
+
+    const shouldConnect = window.confirm(
+      `カード間に接続しますか？\n\n「${edge.from.node.title || '名称未設定'}」→「${movedNode.title || '名称未設定'}」→「${edge.to.node.title || '名称未設定'}」`,
+    )
+    if (shouldConnect) insertIndependentNodeOnEdge(drag.nodeId, edge)
+    else setFirebaseMessage('カードの位置だけを変更し、接続は変更していません')
   }
 
   const stopFlowCanvasPan = () => {
@@ -3634,21 +3796,11 @@ function App() {
                         </marker>
                       </defs>
                       {decisionFlowChart.edges.map((edge) => {
-                        const startX = edge.from.x + decisionFlowChart.nodeWidth
-                        const getPortOffset = (index: number, count: number) => {
-                          if (count <= 1) return 0
-                          const spacing = Math.min(18, 52 / (count - 1))
-                          return (index - (count - 1) / 2) * spacing
-                        }
-                        const startY = edge.from.y + decisionFlowChart.nodeHeight / 2 + getPortOffset(edge.sourceIndex, edge.sourceCount)
-                        const endX = edge.to.x
-                        const endY = edge.to.y + decisionFlowChart.nodeHeight / 2 + getPortOffset(edge.targetIndex, edge.targetCount)
-                        const goesForward = endX > startX
-                        const laneOffset = getPortOffset(edge.sourceIndex, edge.sourceCount) * 1.2
-                        const baseTurnX = goesForward ? (startX + endX) / 2 : Math.max(startX, endX) + 44
-                        const turnX = goesForward
-                          ? Math.max(startX + 24, Math.min(endX - 24, Math.round(baseTurnX + laneOffset)))
-                          : Math.round(baseTurnX + laneOffset)
+                        const { startX, startY, turnX, endX, endY, goesForward } = getDecisionFlowEdgeGeometry(
+                          edge,
+                          decisionFlowChart.nodeWidth,
+                          decisionFlowChart.nodeHeight,
+                        )
                         const markerId = edge.label === 'YES'
                           ? 'decision-flow-arrow-yes'
                           : edge.label === 'NO'
