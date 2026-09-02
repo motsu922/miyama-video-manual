@@ -1227,6 +1227,14 @@ function App() {
     setFirebaseMessage('フローチャートを整えました。必要ならUndoで元に戻せます')
   }
 
+  const printWithMode = (mode: 'flowchart' | 'qr') => {
+    document.body.dataset.printMode = mode
+    window.print()
+    window.setTimeout(() => {
+      delete document.body.dataset.printMode
+    }, 1000)
+  }
+
   const addDecisionNodeToFlow = (sourceId: string, type: Extract<DecisionNodeType, 'question' | 'action'>) => {
     const sourceNode = decisionNodeMap.get(sourceId)
     if (!sourceNode || sourceNode.type === 'end') return
@@ -3586,7 +3594,7 @@ function App() {
                         className="print-flowchart-button"
                         title="フローチャートを印刷またはPDF保存"
                         type="button"
-                        onClick={() => window.print()}
+                        onClick={() => printWithMode('flowchart')}
                       >
                         <Printer size={16} aria-hidden="true" />
                         印刷 / PDF
@@ -4675,7 +4683,7 @@ function App() {
                     <Copy size={16} aria-hidden="true" />
                     リンクをコピー
                   </button>
-                  <button type="button" onClick={() => window.print()}>
+                  <button type="button" onClick={() => printWithMode('qr')}>
                     <Printer size={16} aria-hidden="true" />
                     QRコードを印刷
                   </button>
