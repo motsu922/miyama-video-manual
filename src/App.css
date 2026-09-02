@@ -3293,9 +3293,10 @@ textarea {
     display: block;
     height: 13mm;
     margin-bottom: 2mm;
-    padding: 0;
+    padding: 0 2mm;
     border-bottom: 0;
     box-shadow: none;
+    box-sizing: border-box;
   }
 
   body[data-print-mode='flowchart'] #decision-flowchart-print .flowchart-print-header {
