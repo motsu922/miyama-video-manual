@@ -4048,6 +4048,11 @@ textarea {
     gap: 10px;
   }
 
+  .qr-viewer-shell .decision-runner-navigation {
+    order: 10;
+    margin-top: 4px;
+  }
+
   .qr-viewer-shell .decision-answer-actions,
   .qr-viewer-shell .decision-next-action,
   .qr-viewer-shell .decision-complete-state {
