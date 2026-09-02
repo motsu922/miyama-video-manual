@@ -1179,6 +1179,74 @@ function App() {
     setFirebaseMessage('カードを接続しました')
   }
 
+  const tidyDecisionFlow = () => {
+    if (isEditingLocked || decisionFlowChart.nodes.length === 0) return
+
+    const layoutById = new Map(decisionFlowChart.nodes.map((item) => [item.node.id, item]))
+    const outgoing = new Map<string, string[]>()
+    decisionFlowChart.edges.forEach((edge) => {
+      outgoing.set(edge.from.node.id, [...(outgoing.get(edge.from.node.id) ?? []), edge.to.node.id])
+    })
+    const depthById = new Map<string, number>()
+    const startId = decisionStartNodeId ?? decisionFlowChart.nodes[0]?.node.id
+    const queue = startId ? [startId] : []
+    if (startId) depthById.set(startId, 0)
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const nodeId = queue[index]
+      const depth = depthById.get(nodeId) ?? 0
+      ;(outgoing.get(nodeId) ?? []).forEach((targetId) => {
+        if (depthById.has(targetId)) return
+        depthById.set(targetId, depth + 1)
+        queue.push(targetId)
+      })
+    }
+
+    let disconnectedDepth = Math.max(0, ...depthById.values()) + 1
+    decisionFlowChart.nodes
+      .filter((item) => !depthById.has(item.node.id))
+      .sort((left, right) => left.y - right.y || left.x - right.x)
+      .forEach((item) => {
+        depthById.set(item.node.id, disconnectedDepth)
+        disconnectedDepth += 1
+      })
+
+    const layers = new Map<number, string[]>()
+    decisionFlowChart.nodes.forEach((item) => {
+      const depth = depthById.get(item.node.id) ?? 0
+      layers.set(depth, [...(layers.get(depth) ?? []), item.node.id])
+    })
+    layers.forEach((nodeIds) => {
+      nodeIds.sort((leftId, rightId) => {
+        const left = layoutById.get(leftId)
+        const right = layoutById.get(rightId)
+        return (left?.y ?? 0) - (right?.y ?? 0) || (left?.x ?? 0) - (right?.x ?? 0)
+      })
+    })
+
+    const nodeWidth = decisionFlowChart.nodeWidth
+    const nodeHeight = decisionFlowChart.nodeHeight
+    const columnGap = 92
+    const rowGap = 42
+    const nextPositions = new Map<string, { x: number; y: number }>()
+    ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([depth, nodeIds]) => {
+      nodeIds.forEach((nodeId, index) => {
+        nextPositions.set(nodeId, {
+          x: 38 + depth * (nodeWidth + columnGap),
+          y: 30 + index * (nodeHeight + rowGap),
+        })
+      })
+    })
+
+    updateManual({
+      decisionNodes: decisionNodes.map((node) => ({
+        ...node,
+        flowPosition: nextPositions.get(node.id) ?? node.flowPosition,
+      })),
+    })
+    setFirebaseMessage('フローチャートを整えました。必要ならUndoで元に戻せます')
+  }
+
   const addDecisionNodeToFlow = (sourceId: string, type: Extract<DecisionNodeType, 'question' | 'action'>) => {
     const sourceNode = decisionNodeMap.get(sourceId)
     if (!sourceNode || sourceNode.type === 'end') return
@@ -3484,6 +3552,15 @@ function App() {
                         >
                           <RotateCcw size={16} aria-hidden="true" />
                           元に戻す
+                        </button>
+                        <button
+                          disabled={isEditingLocked || decisionFlowChart.nodes.length === 0}
+                          title="現在の配置順をベースにカードと矢印を整列"
+                          type="button"
+                          onClick={tidyDecisionFlow}
+                        >
+                          <ListChecks size={16} aria-hidden="true" />
+                          整える
                         </button>
                         <button
                           className={flowTool === 'select' ? 'active' : ''}
