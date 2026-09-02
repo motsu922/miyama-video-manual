@@ -1326,6 +1326,10 @@ textarea {
   background: #fff;
 }
 
+.flowchart-print-header {
+  display: none;
+}
+
 .decision-flowchart-heading {
   position: sticky;
   top: 0;
@@ -3249,6 +3253,35 @@ textarea {
     padding: 0;
     border-bottom: 0;
     box-shadow: none;
+  }
+
+  #decision-flowchart-print .flowchart-print-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 160px;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #17202f;
+  }
+
+  #decision-flowchart-print .flowchart-print-header p {
+    margin-bottom: 4px;
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  #decision-flowchart-print .flowchart-print-header h1 {
+    color: #17202f;
+    font-size: 24px;
+  }
+
+  #decision-flowchart-print .flowchart-print-header img {
+    width: 160px;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 4px;
   }
 
   #decision-flowchart-print .decision-flowchart-heading::after {
