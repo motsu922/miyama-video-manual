@@ -1,7 +1,6 @@
 import {
   ArrowDown,
   ArrowLeft,
-  ArrowRight,
   ArrowUp,
   BookOpen,
   CheckCircle2,
@@ -15,6 +14,7 @@ import {
   Link2,
   ListChecks,
   LockKeyhole,
+  Maximize2,
   MousePointer2,
   Paperclip,
   PlayCircle,
@@ -702,6 +702,7 @@ function App() {
   const [query, setQuery] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [pendingInspectionImage, setPendingInspectionImage] = useState<PendingInspectionImage | null>(null)
+  const [fullscreenViewerImage, setFullscreenViewerImage] = useState<{ src: string; alt: string } | null>(null)
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null)
   const [draggingAnnotationId, setDraggingAnnotationId] = useState<string | null>(null)
   const [currentVideoTime, setCurrentVideoTime] = useState(0)
@@ -781,6 +782,20 @@ function App() {
       ? 'Firebase接続を確認しています'
       : 'Firebase未設定: サンプルデータで表示しています',
   )
+
+  useEffect(() => {
+    if (!fullscreenViewerImage) return
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullscreenViewerImage(null)
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [fullscreenViewerImage])
 
   const selectedManual = manuals.find((manual) => manual.id === selectedId) ?? manuals[0] ?? initialManuals[0]
   const selectedManualRef = useRef(selectedManual)
@@ -2986,11 +3001,7 @@ function App() {
   }
 
   return (
-    <main
-      className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''}`}
-      data-manual-id={selectedManual.id}
-      data-qr-viewer={isQrViewer ? 'true' : 'false'}
-    >
+    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''}`}>
       <aside className="sidebar" aria-label="動画マニュアル一覧">
         <div className="brand">
           <img src={miyamaLogo} alt="MIYAMA" />
@@ -4665,7 +4676,16 @@ function App() {
                     )}
                   </div>
                 ) : (
-                  <img src={selectedManual.thumbnail} alt="" />
+                  <button
+                    className="viewer-image-button viewer-main-image-button"
+                    type="button"
+                    title="タップして全画面表示"
+                    aria-label="タイトル写真を全画面表示"
+                    onClick={() => setFullscreenViewerImage({ src: selectedManual.thumbnail, alt: selectedManual.title })}
+                  >
+                    <img src={selectedManual.thumbnail} alt="" />
+                    <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
+                  </button>
                 )}
                 <div>
                   <p>
@@ -4681,46 +4701,6 @@ function App() {
                       <span key={tag}>{tag}</span>
                     ))}
                   </div>
-                  {isQrViewer && activeStep && (
-                    <section className="qr-mobile-step-panel" aria-label="現在の作業手順">
-                      <header>
-                        <span>{activeStep.time}</span>
-                        <strong>
-                          {selectedManual.steps.findIndex((step) => step.id === activeStep.id) + 1}
-                          {' / '}
-                          {selectedManual.steps.length}
-                        </strong>
-                      </header>
-                      <h3>{translatedSteps.get(activeStep.id)?.title ?? activeStep.title}</h3>
-                      <p>{translatedSteps.get(activeStep.id)?.detail ?? activeStep.detail}</p>
-                      <div className="qr-mobile-step-navigation">
-                        <button
-                          disabled={selectedManual.steps.findIndex((step) => step.id === activeStep.id) <= 0}
-                          type="button"
-                          onClick={() => {
-                            const index = selectedManual.steps.findIndex((step) => step.id === activeStep.id)
-                            const previousStep = selectedManual.steps[index - 1]
-                            if (previousStep) void seekViewerStep(previousStep)
-                          }}
-                        >
-                          <ArrowLeft size={17} aria-hidden="true" />
-                          前の手順
-                        </button>
-                        <button
-                          disabled={selectedManual.steps.findIndex((step) => step.id === activeStep.id) >= selectedManual.steps.length - 1}
-                          type="button"
-                          onClick={() => {
-                            const index = selectedManual.steps.findIndex((step) => step.id === activeStep.id)
-                            const nextStep = selectedManual.steps[index + 1]
-                            if (nextStep) void seekViewerStep(nextStep)
-                          }}
-                        >
-                          次の手順
-                          <ArrowRight size={17} aria-hidden="true" />
-                        </button>
-                      </div>
-                    </section>
-                  )}
                   <button
                     type="button"
                     onClick={startViewing}
@@ -4757,7 +4737,16 @@ function App() {
                   <div className="viewer-manual-image-gallery">
                     {(selectedManual.manualImages ?? []).map((image) => (
                       <figure key={image.id}>
-                        <img src={image.url} alt={image.name} />
+                        <button
+                          className="viewer-image-button"
+                          type="button"
+                          title="タップして全画面表示"
+                          aria-label={`${image.name}を全画面表示`}
+                          onClick={() => setFullscreenViewerImage({ src: image.url, alt: image.name })}
+                        >
+                          <img src={image.url} alt={image.name} />
+                          <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
+                        </button>
                         <figcaption>{image.name}</figcaption>
                       </figure>
                     ))}
@@ -4788,7 +4777,16 @@ function App() {
                         <div className="inspection-gallery viewer-gallery">
                           {(step.inspectionImages ?? []).map((image) => (
                             <article className={`inspection-image ${image.kind}`} key={image.id}>
-                              <img src={image.url} alt={image.name} />
+                              <button
+                                className="viewer-image-button"
+                                type="button"
+                                title="タップして全画面表示"
+                                aria-label={`${image.name}を全画面表示`}
+                                onClick={() => setFullscreenViewerImage({ src: image.url, alt: image.name })}
+                              >
+                                <img src={image.url} alt={image.name} />
+                                <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
+                              </button>
                               <span>{imageKindLabels[image.kind]}</span>
                               <strong>{image.name}</strong>
                             </article>
@@ -4824,7 +4822,16 @@ function App() {
                     <div className="inspection-gallery viewer-gallery">
                       {(step.inspectionImages ?? []).map((image) => (
                         <article className={`inspection-image ${image.kind}`} key={image.id}>
-                          <img src={image.url} alt={image.name} />
+                          <button
+                            className="viewer-image-button"
+                            type="button"
+                            title="タップして全画面表示"
+                            aria-label={`${image.name}を全画面表示`}
+                            onClick={() => setFullscreenViewerImage({ src: image.url, alt: image.name })}
+                          >
+                            <img src={image.url} alt={image.name} />
+                            <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
+                          </button>
                           <span>{imageKindLabels[image.kind]}</span>
                           <strong>{image.name}</strong>
                         </article>
@@ -4929,7 +4936,16 @@ function App() {
                       {activeDecisionNode.media.map((media) =>
                         media.kind === 'image' ? (
                           <figure key={media.id}>
-                            <img src={media.url} alt={media.name} />
+                            <button
+                              className="viewer-image-button"
+                              type="button"
+                              title="タップして全画面表示"
+                              aria-label={`${media.name}を全画面表示`}
+                              onClick={() => setFullscreenViewerImage({ src: media.url, alt: media.name })}
+                            >
+                              <img src={media.url} alt={media.name} />
+                              <Maximize2 className="viewer-image-expand-icon" size={18} aria-hidden="true" />
+                            </button>
                             <figcaption>{media.name}</figcaption>
                           </figure>
                         ) : (
@@ -5166,6 +5182,29 @@ function App() {
           {firebaseMessage}
         </footer>
       </section>
+      {fullscreenViewerImage && (
+        <div
+          className="viewer-image-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${fullscreenViewerImage.alt || '画像'}の全画面表示`}
+          onClick={() => setFullscreenViewerImage(null)}
+        >
+          <button
+            className="viewer-image-lightbox-close"
+            type="button"
+            aria-label="全画面表示を閉じる"
+            onClick={() => setFullscreenViewerImage(null)}
+          >
+            <X size={24} aria-hidden="true" />
+          </button>
+          <img
+            src={fullscreenViewerImage.src}
+            alt={fullscreenViewerImage.alt}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
       {pendingInspectionImage && (
         <div className="image-editor-backdrop" role="dialog" aria-modal="true">
           <section className="image-editor">
