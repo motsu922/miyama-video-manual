@@ -3269,8 +3269,8 @@ textarea {
   body[data-print-mode='flowchart'] #decision-flowchart-print {
     position: absolute;
     top: 0;
-    left: 0;
-    width: 277mm;
+    left: 2mm;
+    width: 273mm;
     height: 190mm;
     overflow: hidden;
     box-sizing: border-box;
@@ -3333,6 +3333,7 @@ textarea {
   body[data-print-mode='flowchart'] #decision-flowchart-print .decision-flowchart-heading::after {
     display: block;
     margin-top: 4px;
+    margin-left: 2mm;
     color: #17202f;
     content: '異常処置フローチャート';
     font-size: 20px;
