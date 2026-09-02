@@ -3431,6 +3431,15 @@ function App() {
                   </section>
                 </details>
                 <section className="decision-flowchart" id="decision-flowchart-print" aria-label="処置フロー図">
+                  <div className="flowchart-print-header" aria-hidden="true">
+                    <div>
+                      <p>ミヤマ工業動画マニュアル</p>
+                      <h1>{selectedManual.title || '名称未設定の手順書'}</h1>
+                    </div>
+                    {selectedManual.thumbnail && (
+                      <img src={selectedManual.thumbnail} alt="" />
+                    )}
+                  </div>
                   <div className="decision-flowchart-heading">
                     <p className="eyebrow">フローチャート</p>
                     <div className="decision-flowchart-tools">
