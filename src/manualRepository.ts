@@ -33,7 +33,7 @@ export function subscribeManuals(
   onError: (message: string) => void,
 ) {
   if (!isFirebaseConfigured || !db) {
-    onError('Firebase設定が未投入のためサンプルデータで表示しています')
+    onError('Firebase設定が未投入です。接続設定を確認してください')
     return () => undefined
   }
 
