@@ -479,8 +479,7 @@ function splitDecisionFlowLabel(title: string) {
 function formatDecisionFlowEdgeLabel(label: string, sourceIndex = 0, sourceCount = 1) {
   const normalized = label.trim()
   if (!normalized) return ''
-  const shortened = normalized.length > 14 ? `${normalized.slice(0, 13)}...` : normalized
-  return sourceCount > 2 ? `${sourceIndex + 1}. ${shortened}` : shortened
+  return sourceCount > 2 ? `${sourceIndex + 1}. ${normalized}` : normalized
 }
 
 function getVideoDuration(file: File) {
@@ -1182,59 +1181,28 @@ function App() {
   const tidyDecisionFlow = () => {
     if (isEditingLocked || decisionFlowChart.nodes.length === 0) return
 
-    const layoutById = new Map(decisionFlowChart.nodes.map((item) => [item.node.id, item]))
-    const outgoing = new Map<string, string[]>()
-    decisionFlowChart.edges.forEach((edge) => {
-      outgoing.set(edge.from.node.id, [...(outgoing.get(edge.from.node.id) ?? []), edge.to.node.id])
+    const minX = Math.min(...decisionFlowChart.nodes.map((item) => item.x))
+    const minY = Math.min(...decisionFlowChart.nodes.map((item) => item.y))
+    const labelWidths = decisionFlowChart.edges.map((edge) => {
+      const label = formatDecisionFlowEdgeLabel(edge.label, edge.sourceIndex, edge.sourceCount)
+      return Math.max(48, label.length * 11 + 18)
     })
-    const depthById = new Map<string, number>()
-    const startId = decisionStartNodeId ?? decisionFlowChart.nodes[0]?.node.id
-    const queue = startId ? [startId] : []
-    if (startId) depthById.set(startId, 0)
+    const longestLabelWidth = Math.max(48, ...labelWidths)
+    const forwardGaps = decisionFlowChart.edges
+      .map((edge) => edge.to.x - (edge.from.x + decisionFlowChart.nodeWidth))
+      .filter((gap) => gap > 0)
+    const narrowestForwardGap = Math.min(...forwardGaps, Infinity)
+    const horizontalScale = Number.isFinite(narrowestForwardGap)
+      ? Math.min(3.5, Math.max(1, (longestLabelWidth + 32) / Math.max(1, narrowestForwardGap)))
+      : 1
+    const verticalScale = decisionFlowChart.edges.some((edge) => edge.sourceCount > 1) ? 1.12 : 1
 
-    for (let index = 0; index < queue.length; index += 1) {
-      const nodeId = queue[index]
-      const depth = depthById.get(nodeId) ?? 0
-      ;(outgoing.get(nodeId) ?? []).forEach((targetId) => {
-        if (depthById.has(targetId)) return
-        depthById.set(targetId, depth + 1)
-        queue.push(targetId)
-      })
-    }
-
-    let disconnectedDepth = Math.max(0, ...depthById.values()) + 1
-    decisionFlowChart.nodes
-      .filter((item) => !depthById.has(item.node.id))
-      .sort((left, right) => left.y - right.y || left.x - right.x)
-      .forEach((item) => {
-        depthById.set(item.node.id, disconnectedDepth)
-        disconnectedDepth += 1
-      })
-
-    const layers = new Map<number, string[]>()
-    decisionFlowChart.nodes.forEach((item) => {
-      const depth = depthById.get(item.node.id) ?? 0
-      layers.set(depth, [...(layers.get(depth) ?? []), item.node.id])
-    })
-    layers.forEach((nodeIds) => {
-      nodeIds.sort((leftId, rightId) => {
-        const left = layoutById.get(leftId)
-        const right = layoutById.get(rightId)
-        return (left?.y ?? 0) - (right?.y ?? 0) || (left?.x ?? 0) - (right?.x ?? 0)
-      })
-    })
-
-    const nodeWidth = decisionFlowChart.nodeWidth
-    const nodeHeight = decisionFlowChart.nodeHeight
-    const columnGap = 170
-    const rowGap = 64
+    // 正比例で拡大するため、カード同士の左右・上下の関係は変えない。
     const nextPositions = new Map<string, { x: number; y: number }>()
-    ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([depth, nodeIds]) => {
-      nodeIds.forEach((nodeId, index) => {
-        nextPositions.set(nodeId, {
-          x: 38 + depth * (nodeWidth + columnGap),
-          y: 30 + index * (nodeHeight + rowGap),
-        })
+    decisionFlowChart.nodes.forEach((item) => {
+      nextPositions.set(item.node.id, {
+        x: 38 + (item.x - minX) * horizontalScale,
+        y: 30 + (item.y - minY) * verticalScale,
       })
     })
 
@@ -3668,7 +3636,7 @@ function App() {
                             : 'decision-flow-arrow'
                         const edgePath = `M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`
                         const edgeLabel = formatDecisionFlowEdgeLabel(edge.label, edge.sourceIndex, edge.sourceCount)
-                        const labelWidth = Math.min(176, Math.max(48, edgeLabel.length * 11 + 18))
+                        const labelWidth = Math.max(48, edgeLabel.length * 11 + 18)
                         const labelX = goesForward
                           ? Math.max(turnX + 6, endX - labelWidth - 10)
                           : Math.min(turnX - labelWidth - 6, endX + 10)
