@@ -683,6 +683,8 @@ function App() {
   } | null>(null)
   const suppressFlowClickRef = useRef(false)
   const decisionSyncSessionsRef = useRef(new Map<string, { targetIds: string[]; propagate: boolean }>())
+  const decisionUndoStackRef = useRef<DecisionNode[][]>([])
+  const isUndoingDecisionRef = useRef(false)
   const pendingManualIdsRef = useRef(new Set<string>())
   const [firebaseMessage, setFirebaseMessage] = useState(
     isFirebaseConfigured
@@ -907,6 +909,7 @@ function App() {
     setFlowEdgeMenu(null)
     setCopiedDecisionNode(null)
     setDecisionEditDraft(null)
+    decisionUndoStackRef.current = []
   }, [selectedManual.id])
 
   useEffect(() => {
@@ -1042,6 +1045,12 @@ function App() {
   }
 
   const updateManual = (patch: Partial<Manual>) => {
+    if (patch.decisionNodes && !isUndoingDecisionRef.current) {
+      decisionUndoStackRef.current = [
+        ...decisionUndoStackRef.current.slice(-99),
+        JSON.parse(JSON.stringify(decisionNodes)) as DecisionNode[],
+      ]
+    }
     markManualDirty(selectedManual.id)
     setManuals((current) =>
       current.map((manual) =>
@@ -1050,6 +1059,19 @@ function App() {
           : manual,
       ),
     )
+  }
+
+  const undoDecisionChange = () => {
+    const previousNodes = decisionUndoStackRef.current.pop()
+    if (!previousNodes) return
+    isUndoingDecisionRef.current = true
+    updateManual({ decisionNodes: previousNodes })
+    isUndoingDecisionRef.current = false
+    setFlowContextMenu(null)
+    setFlowEdgeMenu(null)
+    setIsDecisionEditorOpen(false)
+    setDecisionEditDraft(null)
+    setFirebaseMessage('フローチャートを1つ前の状態に戻しました')
   }
 
   const getSameTitleNodeIds = (nodeId: string) => {
@@ -1708,6 +1730,11 @@ function App() {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && shortcutKey === 'v') {
       event.preventDefault()
       pasteDecisionNode()
+      return
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && shortcutKey === 'z') {
+      event.preventDefault()
+      undoDecisionChange()
       return
     }
     if ((event.key === 'Delete' || event.key === 'Backspace') && selectedDecisionNodeId) {
@@ -3397,6 +3424,15 @@ function App() {
                     <div className="decision-flowchart-tools">
                       <span>{decisionNodes.length} ノード</span>
                       <div className="decision-flow-tool-group">
+                        <button
+                          disabled={isEditingLocked || decisionUndoStackRef.current.length === 0}
+                          title="フローチャートの変更を1つ戻す（Ctrl+Z）"
+                          type="button"
+                          onClick={undoDecisionChange}
+                        >
+                          <RotateCcw size={16} aria-hidden="true" />
+                          元に戻す
+                        </button>
                         <button
                           className={flowTool === 'select' ? 'active' : ''}
                           title="カードをドラッグして移動"
