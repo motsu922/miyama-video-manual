@@ -813,6 +813,47 @@ h2 {
   flex-wrap: wrap;
 }
 
+.manual-save-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  padding: 0 13px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+.manual-save-button.needs-save {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 0 0 3px #bfdbfe;
+}
+
+.top-save-status {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.top-save-status.saved {
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.top-save-status.unsaved {
+  color: #9a3412;
+  background: #fff7ed;
+}
+
 .translation-panel {
   display: grid;
   gap: 12px;
