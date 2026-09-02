@@ -1805,8 +1805,7 @@ function App() {
     const copiedNode = createDecisionNodeCopy(copiedDecisionNode, copiedDecisionNode.flowPosition ?? { x: 38, y: 30 })
     updateManual({ decisionNodes: [...decisionNodes, copiedNode] })
     setSelectedDecisionNodeId(copiedNode.id)
-    setIsDecisionEditorOpen(true)
-    setFirebaseMessage('カードを貼り付けました。接続モードで接続先を指定してください')
+    setFirebaseMessage('カードを貼り付けました。必要に応じて接続先を指定してください')
   }
 
   const updateDecisionBranch = (
