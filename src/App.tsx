@@ -2436,6 +2436,27 @@ function App() {
     setReviewComment('')
   }
 
+  const toggleManualVisibility = async () => {
+    const shouldPublish = !isPublished
+    if (
+      shouldPublish &&
+      !window.confirm('承認ワークフローを省略して、この手順書を現場公開しますか？')
+    ) {
+      return
+    }
+
+    const event = createApprovalEvent(shouldPublish ? 'published' : 'revision', selectedManual.owner)
+    await saveWorkflowManual(
+      {
+        ...selectedManual,
+        status: shouldPublish ? 'published' : 'draft',
+        updatedAt: new Date().toISOString().slice(0, 10),
+        approvalHistory: [...(selectedManual.approvalHistory ?? []), event],
+      },
+      shouldPublish ? '承認を省略して現場公開しました' : '下書きへ切り替えました。編集を再開できます',
+    )
+  }
+
   const returnToDraft = async () => {
     if (!reviewComment.trim()) {
       setFirebaseMessage('差戻し理由を入力してください')
@@ -2802,6 +2823,14 @@ function App() {
             </div>
           </div>
           <div className="manual-actions">
+            <button
+              className={`visibility-toggle-button ${isPublished ? 'to-draft' : 'to-published'}`}
+              type="button"
+              onClick={() => void toggleManualVisibility()}
+            >
+              {isPublished ? <RotateCcw size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+              {isPublished ? '下書きに切替' : '公開に切替'}
+            </button>
             <button
               className={`manual-save-button ${hasUnsavedChanges ? 'needs-save' : ''}`}
               disabled={isEditingLocked}
