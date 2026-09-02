@@ -813,6 +813,32 @@ h2 {
   flex-wrap: wrap;
 }
 
+.visibility-toggle-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 13px;
+  color: #334155;
+  background: #f8fafc;
+  font-weight: 800;
+}
+
+.visibility-toggle-button.to-published {
+  border-color: #86efac;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.visibility-toggle-button.to-draft {
+  border-color: #fed7aa;
+  color: #9a3412;
+  background: #fff7ed;
+}
+
 .manual-save-button {
   min-height: 42px;
   display: inline-flex;
