@@ -1205,9 +1205,9 @@ function App() {
       .filter((gap) => gap > 0)
     const narrowestForwardGap = Math.min(...forwardGaps, Infinity)
     const horizontalScale = Number.isFinite(narrowestForwardGap)
-      ? Math.min(1.45, Math.max(1, (longestLabelWidth + 24) / Math.max(1, narrowestForwardGap)))
-      : 1
-    const verticalScale = decisionFlowChart.edges.some((edge) => edge.sourceCount > 1) ? 1.06 : 1
+      ? Math.min(1.2, Math.max(0.5, (longestLabelWidth + 24) / Math.max(1, narrowestForwardGap)))
+      : 0.5
+    const verticalScale = 1
 
     // 正比例で拡大するため、カード同士の左右・上下の関係は変えない。
     const nextPositions = new Map<string, { x: number; y: number }>()
