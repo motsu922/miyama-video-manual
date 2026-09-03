@@ -670,6 +670,161 @@ button:disabled {
   gap: 30px;
 }
 
+.guide-topic-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.guide-topic-nav a {
+  color: #1d4ed8;
+  font-weight: 700;
+  text-underline-offset: 4px;
+}
+
+.guide-howto {
+  min-width: 0;
+  padding-top: 26px;
+  border-top: 1px solid #cbd5e1;
+  scroll-margin-top: 24px;
+}
+
+.guide-howto p {
+  color: #475569;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.guide-howto header > p:last-child {
+  margin-top: 12px;
+}
+
+.guide-instructions {
+  margin: 0;
+  padding-left: 26px;
+}
+
+.guide-instructions > li {
+  padding: 18px 0 18px 8px;
+  border-bottom: 1px solid #dbe2ea;
+}
+
+.guide-instructions > li::marker {
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+.guide-howto h3 {
+  margin: 0 0 10px;
+  color: #17202f;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.guide-instructions p + p {
+  margin-top: 8px;
+}
+
+.guide-worked-example {
+  min-width: 0;
+  padding: 22px 0;
+  border-bottom: 1px solid #dbe2ea;
+}
+
+.guide-worked-example dl {
+  margin: 16px 0;
+  display: grid;
+  gap: 12px;
+}
+
+.guide-worked-example dl > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+  line-height: 1.75;
+}
+
+.guide-worked-example dt {
+  color: #0f766e;
+  font-weight: 800;
+}
+
+.guide-worked-example dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.guide-example-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.guide-example-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.guide-example-table caption {
+  padding-bottom: 12px;
+  color: #64748b;
+  text-align: left;
+}
+
+.guide-example-table th,
+.guide-example-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #dbe2ea;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.guide-example-table th {
+  background: #e9eef4;
+}
+
+.guide-example-table th:first-child,
+.guide-example-table td:first-child {
+  width: 72px;
+  white-space: nowrap;
+}
+
+.guide-transfer-note {
+  padding: 16px 18px;
+  border-left: 4px solid #b45309;
+  background: #fff8eb;
+}
+
+.guide-transfer-note > strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #92400e;
+}
+
+.guide-use-summary {
+  padding-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .guide-worked-example dl > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .guide-instructions {
+    padding-left: 22px;
+  }
+
+  .guide-example-table th,
+  .guide-example-table td {
+    padding: 10px 6px;
+  }
+}
+
 .guide-intro h2,
 .guide-section h2 {
   color: #17202f;
