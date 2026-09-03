@@ -30,12 +30,12 @@ jobs:
       - name: Build application
         run: npm run build
         env:
-          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_API_KEY: AIzaSyA0YUIpIDh4WB4p1ewiNB0XfwHve0ByljU
+          VITE_FIREBASE_AUTH_DOMAIN: abnreport-fd733.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: abnreport-fd733
+          VITE_FIREBASE_STORAGE_BUCKET: abnreport-fd733.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '349748947315'
+          VITE_FIREBASE_APP_ID: 1:349748947315:web:010cb671d2a95bcf1f7d06
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
@@ -51,3 +51,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+

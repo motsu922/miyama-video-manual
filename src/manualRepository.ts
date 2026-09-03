@@ -198,3 +198,4 @@ export async function uploadInspectionImage(
   await uploadBytes(imageRef, file, { contentType: file.type || 'image/jpeg' })
   return getDownloadURL(imageRef)
 }
+

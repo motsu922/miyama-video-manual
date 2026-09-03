@@ -48,7 +48,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import './App.css'
 import miyamaLogo from './assets/miyama-logo.png'
-import { isFirebaseConfigured } from './firebase'
+import { firebaseProjectId, isFirebaseConfigured } from './firebase'
 import {
   deleteManual,
   ensureSignedIn,
@@ -3134,7 +3134,7 @@ function App() {
                 <ArrowLeft size={17} aria-hidden="true" />
                 手順書ホームへ
               </button>
-              <p className="eyebrow">Firebase project: miyamaunitec-fb87a</p>
+              <p className="eyebrow">Firebase project: {firebaseProjectId}</p>
               <div className="manual-title-row">
                 <h1>{selectedManual.title || '名称未設定の手順書'}</h1>
                 {decisionNodes.length > 0 && <span className="abnormal-badge">フローチャート</span>}
@@ -5658,3 +5658,4 @@ function App() {
 }
 
 export default App
+

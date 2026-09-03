@@ -14,9 +14,11 @@ const firebaseConfig = {
 }
 
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean)
+export const firebaseProjectId = firebaseConfig.projectId || '未設定'
 
 export const firebaseApp = isFirebaseConfigured ? initializeApp(firebaseConfig) : null
 export const auth = firebaseApp ? getAuth(firebaseApp) : null
 export const db = firebaseApp ? getFirestore(firebaseApp) : null
 export const storage = firebaseApp ? getStorage(firebaseApp) : null
 export const functions = firebaseApp ? getFunctions(firebaseApp, 'asia-northeast1') : null
+
