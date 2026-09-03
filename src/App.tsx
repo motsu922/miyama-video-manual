@@ -50,6 +50,8 @@ import './App.css'
 import miyamaLogo from './assets/miyama-logo.png'
 import { firebaseProjectId, isFirebaseConfigured } from './firebase'
 import DecisionBranchFields from './DecisionBranchFields'
+import DecisionFlowLabel from './DecisionFlowLabel'
+import { getFlowLabelBox, getFlowLabelKey, getFlowLabelSize, splitDecisionFlowEdgeLabel } from './decisionFlowLabels'
 import { applyDecisionBranchDrafts, getDecisionBranches, type DecisionBranchDraft } from './decisionBranches'
 import {
   deleteManual,
@@ -405,6 +407,12 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
     }
   })
 
+  edges.forEach((edge) => {
+    if (!edge.label.trim()) return
+    const { box } = getDecisionFlowLabelLayout(edge, nodeWidth, nodeHeight)
+    width = Math.max(width, box.x + box.width + 30)
+    height = Math.max(height, box.y + box.height + 30)
+  })
   return { edges, height, nodeHeight, nodeWidth, nodes: layoutNodes, width }
 }
 
@@ -482,22 +490,13 @@ function splitDecisionFlowLabel(title: string) {
   return [label.slice(0, maxLineLength), `${label.slice(maxLineLength, maxLineLength * 2 - 1)}...`]
 }
 
-function formatDecisionFlowEdgeLabel(label: string, sourceIndex = 0, sourceCount = 1) {
-  const normalized = label.trim()
-  if (!normalized) return ''
-  return sourceCount > 2 ? `${sourceIndex + 1}. ${normalized}` : normalized
-}
-
-function splitDecisionFlowEdgeLabel(label: string, sourceIndex = 0, sourceCount = 1) {
-  const formatted = formatDecisionFlowEdgeLabel(label, sourceIndex, sourceCount)
-  const characters = Array.from(formatted)
-  const maxLineLength = 16
-  if (characters.length <= maxLineLength) return [formatted]
-  const lines: string[] = []
-  for (let index = 0; index < characters.length; index += maxLineLength) {
-    lines.push(characters.slice(index, index + maxLineLength).join(''))
-  }
-  return lines
+function getDecisionFlowLabelLayout(edge: DecisionFlowEdge, nodeWidth: number, nodeHeight: number) {
+  const key = getFlowLabelKey(edge.connectionKind, edge.branchId)
+  const lines = splitDecisionFlowEdgeLabel(edge.label, edge.sourceIndex, edge.sourceCount)
+  const geometry = getDecisionFlowEdgeGeometry(edge, nodeWidth, nodeHeight)
+  const base = getFlowLabelBox(lines, geometry)
+  const box = getFlowLabelBox(lines, geometry, edge.from.node.flowLabelOffsets?.[key])
+  return { key, lines, base, box }
 }
 
 function getVideoDuration(file: File) {
@@ -1311,8 +1310,7 @@ function App() {
     const minX = Math.min(...decisionFlowChart.nodes.map((item) => item.x))
     const minY = Math.min(...decisionFlowChart.nodes.map((item) => item.y))
     const labelWidths = decisionFlowChart.edges.map((edge) => {
-      const longestLine = Math.max(...splitDecisionFlowEdgeLabel(edge.label, edge.sourceIndex, edge.sourceCount).map((line) => line.length))
-      return Math.min(190, Math.max(48, longestLine * 11 + 18))
+      return getFlowLabelSize(splitDecisionFlowEdgeLabel(edge.label, edge.sourceIndex, edge.sourceCount)).width
     })
     const longestLabelWidth = Math.max(48, ...labelWidths)
     const forwardGaps = decisionFlowChart.edges
@@ -1615,7 +1613,7 @@ function App() {
     })
   }
 
-  const openFlowEdgeMenu = (edge: DecisionFlowEdge, event: ReactMouseEvent<SVGGElement>) => {
+  const openFlowEdgeMenu = (edge: DecisionFlowEdge, event: Pick<ReactMouseEvent<SVGGElement>, 'clientX' | 'clientY' | 'stopPropagation'>) => {
     event.stopPropagation()
     const svg = flowchartSvgRef.current
     const container = flowchartScrollRef.current
@@ -4300,7 +4298,7 @@ function App() {
                         </marker>
                       </defs>
                       {decisionFlowChart.edges.map((edge) => {
-                        const { startX, startY, turnX, endX, endY, goesForward } = getDecisionFlowEdgeGeometry(
+                        const { startX, startY, turnX, endX, endY } = getDecisionFlowEdgeGeometry(
                           edge,
                           decisionFlowChart.nodeWidth,
                           decisionFlowChart.nodeHeight,
@@ -4311,15 +4309,6 @@ function App() {
                             ? 'decision-flow-arrow-no'
                             : 'decision-flow-arrow'
                         const edgePath = `M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`
-                        const edgeLabelLines = splitDecisionFlowEdgeLabel(edge.label, edge.sourceIndex, edge.sourceCount)
-                        const edgeLabel = edgeLabelLines.join('')
-                        const longestLabelLine = Math.max(...edgeLabelLines.map((line) => line.length))
-                        const labelWidth = Math.min(190, Math.max(48, longestLabelLine * 11 + 18))
-                        const labelHeight = edgeLabelLines.length * 18 + 4
-                        const labelX = goesForward
-                          ? Math.max(turnX + 6, endX - labelWidth - 10)
-                          : Math.min(turnX - labelWidth - 6, endX + 10)
-                        const labelY = endY - labelHeight - 5
                         return (
                           <g
                             className={`decision-flow-edge ${edge.label.toLowerCase()}`}
@@ -4328,19 +4317,6 @@ function App() {
                           >
                             <path className="decision-flow-edge-hit" d={edgePath} />
                             <path d={edgePath} markerEnd={`url(#${markerId})`} />
-                            {edgeLabel && (
-                              <g className="decision-flow-edge-label">
-                                <title>{edge.label}</title>
-                                <rect height={labelHeight} rx="4" width={labelWidth} x={labelX} y={labelY} />
-                                <text x={labelX + 8} y={labelY + 15}>
-                                  {edgeLabelLines.map((line, lineIndex) => (
-                                    <tspan key={`${line}-${lineIndex}`} x={labelX + 8} dy={lineIndex === 0 ? 0 : 18}>
-                                      {line}
-                                    </tspan>
-                                  ))}
-                                </text>
-                              </g>
-                            )}
                           </g>
                         )
                       })}
@@ -4408,6 +4384,31 @@ function App() {
                           </g>
                         )
                       })}
+                      <g className="decision-flow-label-layer">
+                        {decisionFlowChart.edges.filter((edge) => edge.label.trim()).map((edge) => {
+                          const { key, lines, base, box } = getDecisionFlowLabelLayout(edge, decisionFlowChart.nodeWidth, decisionFlowChart.nodeHeight)
+                          return (
+                            <DecisionFlowLabel
+                              key={`${selectedManual.id}:${edge.from.node.id}:${key}`}
+                              label={edge.label}
+                              lines={lines}
+                              box={box}
+                              disabled={isEditingLocked}
+                              onDragStart={() => { setFlowContextMenu(null); setFlowEdgeMenu(null) }}
+                              onOpen={(event) => openFlowEdgeMenu(edge, event)}
+                              onMove={(position) => {
+                                if (isEditingLocked || (position.x === box.x && position.y === box.y)) return
+                                updateDecisionNode(edge.from.node.id, {
+                                  flowLabelOffsets: {
+                                    ...edge.from.node.flowLabelOffsets,
+                                    [key]: { x: position.x - base.x, y: position.y - base.y },
+                                  },
+                                })
+                              }}
+                            />
+                          )
+                        })}
+                      </g>
                     </svg>
                     {flowContextMenu && !flowContextNode && (
                       <div

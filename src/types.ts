@@ -111,6 +111,7 @@ export type DecisionNode = {
     x: number
     y: number
   }
+  flowLabelOffsets?: Record<string, { x: number; y: number }>
   media?: DecisionNodeMedia[]
   branches?: DecisionBranch[]
   conditionalNext?: DecisionConditionalNext[]

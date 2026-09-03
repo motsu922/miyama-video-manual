@@ -2355,8 +2355,23 @@ textarea {
   pointer-events: stroke;
 }
 
+.decision-flow-edge-label {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.decision-flow-edge-label.dragging {
+  cursor: grabbing;
+}
+
+.decision-flow-edge-label[aria-disabled="true"] {
+  cursor: default;
+}
+
 .decision-flow-edge-label rect {
-  fill: #fff;
+  fill: rgb(255 255 255 / 78%);
   stroke: #cbd5e1;
   stroke-width: 1;
 }
@@ -2369,8 +2384,10 @@ textarea {
   text-anchor: start;
 }
 
-.decision-flow-edge:hover .decision-flow-edge-label rect {
-  fill: #eff6ff;
+.decision-flow-edge-label:hover rect,
+.decision-flow-edge-label:focus-visible rect,
+.decision-flow-edge-label.dragging rect {
+  fill: rgb(239 246 255 / 78%);
   stroke: #2563eb;
 }
 
@@ -2378,7 +2395,7 @@ textarea {
   stroke: #15803d;
 }
 
-.decision-flow-edge.yes .decision-flow-edge-label text {
+.decision-flow-edge-label.yes text {
   fill: #15803d;
 }
 
@@ -2386,7 +2403,7 @@ textarea {
   stroke: #b91c1c;
 }
 
-.decision-flow-edge.no .decision-flow-edge-label text {
+.decision-flow-edge-label.no text {
   fill: #b91c1c;
 }
 
