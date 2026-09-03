@@ -2608,6 +2608,138 @@ textarea {
   resize: vertical;
 }
 
+.branch-editor {
+  min-width: 0;
+  border-top: 1px solid #dbe4ef;
+  padding-top: 16px;
+}
+
+.branch-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.branch-editor h3 {
+  margin: 0;
+  color: #17202f;
+  font-size: 16px;
+}
+
+.branch-editor > header button,
+.branch-connect-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.branch-editor-rows {
+  display: grid;
+  min-width: 0;
+}
+
+.branch-editor-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1.8fr) 34px;
+  gap: 10px;
+  align-items: start;
+  padding: 16px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.branch-editor-row label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.branch-editor-row input,
+.branch-editor-row select {
+  min-width: 0;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #17202f;
+  font-size: 14px;
+}
+
+.branch-editor-destination {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.branch-editor-arrow {
+  margin-top: 32px;
+  color: #0f766e;
+}
+
+.branch-editor-row .branch-editor-remove {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 40px;
+  margin-top: 24px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff;
+  color: #b91c1c;
+}
+
+.branch-connection-target {
+  margin-top: 12px;
+  padding: 10px;
+  border-left: 3px solid #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  overflow-wrap: anywhere;
+}
+
+.branch-editor-error {
+  color: #b91c1c;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .branch-editor-row {
+    grid-template-columns: minmax(0, 1fr) 40px;
+    gap: 12px;
+  }
+
+  .branch-editor-arrow {
+    display: none;
+  }
+
+  .branch-editor-destination {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .branch-editor-row .branch-editor-remove {
+    grid-column: 2;
+    grid-row: 1;
+    width: 40px;
+  }
+}
+
 .decision-flow-quick-media {
   display: grid;
   gap: 8px;
@@ -2682,6 +2814,10 @@ textarea {
 }
 
 .decision-flow-quick-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: #fff;
   width: 100%;
   display: flex;
   align-items: center;

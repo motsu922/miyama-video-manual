@@ -49,6 +49,8 @@ import { QRCodeSVG } from 'qrcode.react'
 import './App.css'
 import miyamaLogo from './assets/miyama-logo.png'
 import { firebaseProjectId, isFirebaseConfigured } from './firebase'
+import DecisionBranchFields from './DecisionBranchFields'
+import { applyDecisionBranchDrafts, getDecisionBranches, type DecisionBranchDraft } from './decisionBranches'
 import {
   deleteManual,
   ensureSignedIn,
@@ -291,14 +293,6 @@ function getDecisionTargets(node: DecisionNode, getBranchLabel?: (branchId: stri
     ]
   }
   return []
-}
-
-function getDecisionBranches(node: DecisionNode) {
-  if (node.branches?.length) return node.branches
-  return [
-    { id: 'yes', label: 'YES', nextNodeId: node.yesNodeId },
-    { id: 'no', label: 'NO', nextNodeId: node.noNodeId },
-  ]
 }
 
 function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | null) {
@@ -682,6 +676,9 @@ function App() {
     y: number
   } | null>(null)
   const [decisionEditDraft, setDecisionEditDraft] = useState<DecisionNode | null>(null)
+  const [decisionBranchDrafts, setDecisionBranchDrafts] = useState<DecisionBranchDraft[]>([])
+  const [decisionEditorError, setDecisionEditorError] = useState('')
+  const [decisionConnectionTargetId, setDecisionConnectionTargetId] = useState<string | null>(null)
   const [copiedDecisionNode, setCopiedDecisionNode] = useState<DecisionNode | null>(null)
   const [qrManualId] = useState(() => new URLSearchParams(window.location.search).get('manual'))
   const [qrView] = useState(() => new URLSearchParams(window.location.search).get('view'))
@@ -1221,15 +1218,22 @@ function App() {
     if (!node) return
     setSelectedDecisionNodeId(nodeId)
     setDecisionEditDraft({ ...node })
+    setDecisionBranchDrafts(getDecisionBranches(node).map((branch) => ({ ...branch })))
+    setDecisionEditorError('')
+    setDecisionConnectionTargetId(null)
     setIsDecisionEditorOpen(true)
   }
 
   const closeDecisionEditor = () => {
     setDecisionEditDraft(null)
+    setDecisionBranchDrafts([])
+    setDecisionEditorError('')
+    setDecisionConnectionTargetId(null)
     setIsDecisionEditorOpen(false)
   }
 
   const commitDecisionEditor = () => {
+    if (isEditingLocked || decisionConnectionTargetId) return
     if (!decisionEditDraft) {
       closeDecisionEditor()
       return
@@ -1246,15 +1250,32 @@ function App() {
       title: decisionEditDraft.title,
       detail: decisionEditDraft.detail,
     }
-    const hasChanges = originalNode.type !== patch.type || originalNode.title !== patch.title || originalNode.detail !== patch.detail
+    const contentChanged = originalNode.type !== patch.type || originalNode.title !== patch.title || originalNode.detail !== patch.detail
+    const branchesChanged = patch.type === 'question' && (
+      originalNode.type !== 'question' || JSON.stringify(decisionBranchDrafts) !== JSON.stringify(getDecisionBranches(originalNode))
+    )
+    let nextNodes = decisionNodes
+    if (branchesChanged) {
+      const position = decisionFlowChart.nodes.find((node) => node.node.id === originalNode.id)
+      try {
+        nextNodes = applyDecisionBranchDrafts(decisionNodes, originalNode.id, decisionBranchDrafts, {
+          x: position?.x ?? 38, y: position?.y ?? 30,
+          width: decisionFlowChart.nodeWidth, height: decisionFlowChart.nodeHeight,
+        })
+      } catch (error) {
+        setDecisionEditorError(error instanceof Error ? error.message : '分岐を設定できませんでした。')
+        return
+      }
+    }
+    const hasChanges = contentChanged || branchesChanged
     if (hasChanges) {
       const sameTitleNodeIds = getSameTitleNodeIds(originalNode.id)
-      const shouldPropagate = sameTitleNodeIds.length > 0 && window.confirm(
+      const shouldPropagate = contentChanged && sameTitleNodeIds.length > 0 && window.confirm(
         `表示内容が同じカードが${sameTitleNodeIds.length}件あります。\nほかのカードにも同じ変更を反映しますか？`,
       )
       const targetIds = shouldPropagate ? [originalNode.id, ...sameTitleNodeIds] : [originalNode.id]
       updateManual({
-        decisionNodes: decisionNodes.map((node) => (targetIds.includes(node.id) ? { ...node, ...patch } : node)),
+        decisionNodes: nextNodes.map((node) => (targetIds.includes(node.id) ? { ...node, ...patch } : node)),
       })
     }
     setFirebaseMessage(hasChanges ? 'カードの編集を確定しました' : 'カードの編集内容に変更はありません')
@@ -1273,12 +1294,9 @@ function App() {
     }
 
     if (sourceNode.type === 'question') {
-      const branches = getDecisionBranches(sourceNode)
-      const emptyBranchIndex = branches.findIndex((branch) => !branch.nextNodeId)
-      const nextBranches = emptyBranchIndex >= 0
-        ? branches.map((branch, index) => (index === emptyBranchIndex ? { ...branch, nextNodeId: targetId } : branch))
-        : [...branches, { id: `branch-${Date.now()}`, label: `選択肢 ${branches.length + 1}`, nextNodeId: targetId }]
-      updateDecisionNode(sourceId, { branches: nextBranches })
+      openDecisionEditor(sourceId)
+      setDecisionConnectionTargetId(targetId)
+      return
     } else {
       updateDecisionNode(sourceId, { nextNodeId: targetId })
     }
@@ -1362,8 +1380,7 @@ function App() {
     })
 
     updateManual({ decisionNodes: [...updatedNodes, createdNode] })
-    setSelectedDecisionNodeId(id)
-    setIsDecisionEditorOpen(true)
+    openDecisionEditor(id, createdNode)
     setFirebaseMessage(type === 'question' ? '判断カードを追加しました' : '次の作業カードを追加しました')
   }
 
@@ -1735,14 +1752,17 @@ function App() {
       title: type === 'question' ? '確認する項目' : type === 'action' ? '実施する作業' : '手順を完了',
       detail: type === 'question' ? '現場で判断する条件を入力します。' : '現場で実施する内容を入力します。',
       flowPosition: nextPosition,
+      ...(type === 'question' ? { branches: [
+        { id: `${id}-yes`, label: 'YES' },
+        { id: `${id}-no`, label: 'NO' },
+      ] } : {}),
     }
     updateManual({
       decisionNodes: decisionNodes.map((node) =>
         link && node.id === link.nodeId ? { ...node, [link.field]: id } : node,
       ).concat(nextNode),
     })
-    setSelectedDecisionNodeId(id)
-    setIsDecisionEditorOpen(true)
+    openDecisionEditor(id, nextNode)
   }
 
   const addDecisionActionChain = () => {
@@ -1773,8 +1793,7 @@ function App() {
         )
         .concat(chainNodes),
     })
-    setSelectedDecisionNodeId(chainNodes[0].id)
-    setIsDecisionEditorOpen(true)
+    openDecisionEditor(chainNodes[0].id, chainNodes[0])
     setDecisionChainTitles('')
     setFirebaseMessage(
       sourceNode
@@ -1787,9 +1806,8 @@ function App() {
     const node = decisionNodeMap.get(nodeId)
     if (!node) return
     const branches = getDecisionBranches(node)
-    updateDecisionNode(nodeId, {
-      branches: [...branches, { id: `branch-${Date.now()}`, label: `選択肢 ${branches.length + 1}` }],
-    })
+    openDecisionEditor(nodeId)
+    setDecisionBranchDrafts([...branches, { id: `branch-${crypto.randomUUID()}`, label: `選択肢 ${branches.length + 1}` }])
   }
 
   const createDecisionNodeCopy = (sourceNode: DecisionNode, position: { x: number; y: number }) => {
@@ -1824,8 +1842,7 @@ function App() {
     if (!sourceNode || !layoutNode) return
     const copiedNode = createDecisionNodeCopy(sourceNode, { x: layoutNode.x, y: layoutNode.y })
     updateManual({ decisionNodes: [...decisionNodes, copiedNode] })
-    setSelectedDecisionNodeId(copiedNode.id)
-    setIsDecisionEditorOpen(true)
+    openDecisionEditor(copiedNode.id, copiedNode)
     setFirebaseMessage('カードを複製しました。接続モードで接続先を指定してください')
   }
 
@@ -3448,8 +3465,9 @@ function App() {
                 </li>
                 <li>
                   <h3>判断カードに選択肢と分岐先を設定する</h3>
-                  <p>判断カードを右クリックして「分岐を追加」を選ぶと、3つ以上の選択肢を作れます。図の下にある「詳細設定」を開き、対象の判断カードの「選択肢と分岐先」で、選択肢の名前と行き先を設定します。</p>
-                  <p>「つなぐ」で判断カードから接続すると、行き先が未設定の選択肢から順に割り当てられます。意図した条件に接続されたか、矢印の表示と詳細設定の両方で確認してください。</p>
+                  <p>判断カードをクリックし、編集画面の「選択肢と次のカード」に「OK」「NG」などを入力します。「次のカード」で既存のカードを選ぶか、「新しい作業を作成」を選んでカード名を入力します。「確定」で必要なカードと矢印がまとめて作られます。</p>
+                  <p>「選択肢を追加」で3つ以上の分岐に増やせます。「戻す」を押すと、未確定の分岐変更や新しい接続先カードは作成されません。詳細設定まで移動する必要はありません。</p>
+                  <p>「つなぐ」で判断カードから接続する場合は、接続先をクリックした後に編集画面が開きます。使いたい選択肢の「この分岐につなぐ」を押し、「確定」で反映します。</p>
                 </li>
                 <li>
                   <h3>配置と接続を見直す</h3>
@@ -4564,7 +4582,7 @@ function App() {
                         <label>
                           <span>種別</span>
                           <select
-                            disabled={isEditingLocked}
+                            disabled={isEditingLocked || decisionConnectionTargetId !== null}
                             value={(decisionEditDraft ?? editingDecisionNode).type}
                             onChange={(event) => setDecisionEditDraft((current) => ({
                               ...(current ?? editingDecisionNode),
@@ -4601,6 +4619,18 @@ function App() {
                           />
                         </label>
                       </div>
+                      {(decisionEditDraft ?? editingDecisionNode).type === 'question' && (
+                        <DecisionBranchFields
+                          sourceId={editingDecisionNode.id}
+                          nodes={decisionNodes}
+                          rows={decisionBranchDrafts}
+                          disabled={isEditingLocked}
+                          connectionTargetId={decisionConnectionTargetId}
+                          onChange={(rows) => { setDecisionBranchDrafts(rows); setDecisionEditorError('') }}
+                          onConnectionChosen={() => setDecisionConnectionTargetId(null)}
+                        />
+                      )}
+                      {decisionEditorError && <p className="branch-editor-error" role="alert">{decisionEditorError}</p>}
                       {(editingDecisionNode.media?.length ?? 0) > 0 && (
                         <section className="decision-flow-quick-media" aria-label="カードの添付資料">
                           <header>
@@ -4653,7 +4683,7 @@ function App() {
                         </label>
                         <button
                           className="decision-confirm"
-                          disabled={isEditingLocked}
+                          disabled={isEditingLocked || decisionConnectionTargetId !== null}
                           type="button"
                           onClick={commitDecisionEditor}
                         >
