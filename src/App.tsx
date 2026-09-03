@@ -98,7 +98,7 @@ const statusFlow: ApprovalStatus[] = ['draft', 'review', 'approved', 'published'
 
 const decisionNodeTypeLabels: Record<DecisionNodeType, string> = {
   question: '判断',
-  action: '処置',
+  action: '作業',
   end: '完了',
 }
 
@@ -774,7 +774,6 @@ function App() {
   const isQrViewer = Boolean(qrManualId && hasOpenedQrManual)
   const isPublished = selectedManual.status === 'published'
   const isEditingLocked = selectedManual.status !== 'draft'
-  const isAbnormalManual = selectedManual.kind === 'abnormal'
   const decisionNodes = useMemo<DecisionNode[]>(
     () => selectedManual.decisionNodes ?? [],
     [selectedManual.decisionNodes],
@@ -805,9 +804,9 @@ function App() {
     url.search = ''
     url.hash = ''
     url.searchParams.set('manual', selectedManual.id)
-    if (isAbnormalManual) url.searchParams.set('view', 'decision')
+    if (decisionNodes.length > 0) url.searchParams.set('view', 'decision')
     return url.toString()
-  }, [isAbnormalManual, selectedManual.id])
+  }, [decisionNodes.length, selectedManual.id])
   const videoClips = useMemo<VideoClip[]>(() => {
     if (selectedManual.videoClips?.length) return selectedManual.videoClips
     if (!selectedManual.videoUrl) return []
@@ -945,7 +944,7 @@ function App() {
     const qrManual = manuals.find((manual) => manual.id === qrManualId)
     if (hasOpenedQrManual || !qrManual) return
     setSelectedId(qrManual.id)
-    setView(qrView === 'decision' || qrManual.kind === 'abnormal' ? 'decision' : 'library')
+    setView(qrView === 'decision' || (qrManual.decisionNodes?.length ?? 0) > 0 ? 'decision' : 'library')
     setHasOpenedQrManual(true)
   }, [hasOpenedQrManual, manuals, qrManualId, qrView])
 
@@ -1298,7 +1297,7 @@ function App() {
     const createdNode: DecisionNode = {
       id,
       type,
-      title: type === 'question' ? '確認する項目' : '実施する処置',
+      title: type === 'question' ? '確認する項目' : '実施する作業',
       detail: type === 'question' ? '現場で判断する条件を入力します。' : '現場で実施する内容を入力します。',
       flowPosition: {
         x: Math.max(20, (sourceNode.flowPosition?.x ?? 38) + 270),
@@ -1322,7 +1321,7 @@ function App() {
     updateManual({ decisionNodes: [...updatedNodes, createdNode] })
     setSelectedDecisionNodeId(id)
     setIsDecisionEditorOpen(true)
-    setFirebaseMessage(type === 'question' ? '判断カードを追加しました' : '次の処置カードを追加しました')
+    setFirebaseMessage(type === 'question' ? '判断カードを追加しました' : '次の作業カードを追加しました')
   }
 
   const getFlowPoint = (clientX: number, clientY: number) => {
@@ -1690,7 +1689,7 @@ function App() {
     const nextNode: DecisionNode = {
       id,
       type,
-      title: type === 'question' ? '確認する項目' : type === 'action' ? '実施する処置' : '処置を完了',
+      title: type === 'question' ? '確認する項目' : type === 'action' ? '実施する作業' : '手順を完了',
       detail: type === 'question' ? '現場で判断する条件を入力します。' : '現場で実施する内容を入力します。',
       flowPosition: nextPosition,
     }
@@ -1709,7 +1708,7 @@ function App() {
       .map((title) => title.trim())
       .filter(Boolean)
     if (titles.length < 2) {
-      setFirebaseMessage('連結する処置を2件以上、1行ずつ入力してください')
+      setFirebaseMessage('連結する作業を2件以上、1行ずつ入力してください')
       return
     }
 
@@ -1736,8 +1735,8 @@ function App() {
     setDecisionChainTitles('')
     setFirebaseMessage(
       sourceNode
-        ? `${chainNodes.length}件の処置を「${sourceNode.title || '選択した処置'}」の次へ連結しました`
-        : `${chainNodes.length}件の処置を連結して追加しました`,
+        ? `${chainNodes.length}件の作業を「${sourceNode.title || '選択した作業'}」の次へ連結しました`
+        : `${chainNodes.length}件の作業を連結して追加しました`,
     )
   }
 
@@ -1906,7 +1905,7 @@ function App() {
   }
 
   flowKeyboardHandlerRef.current = (event) => {
-    if (view !== 'edit' || !isAbnormalManual) return
+    if (view !== 'edit') return
     if (event.key === 'Escape' && isDecisionEditorOpen) {
       event.preventDefault()
       closeDecisionEditor()
@@ -2614,8 +2613,7 @@ function App() {
       !selectedManual.controlNo && '整理No',
       !selectedManual.productName && '品名',
       !selectedManual.owner && '作成者',
-      !isAbnormalManual && !selectedManual.videoUrl && (selectedManual.manualImages?.length ?? 0) === 0 && '動画または写真資料',
-      isAbnormalManual ? decisionNodes.length === 0 && '処置フロー' : selectedManual.steps.length === 0 && '手順',
+      decisionNodes.length === 0 && selectedManual.steps.length === 0 && 'フローチャートまたは手順',
     ].filter(Boolean)
 
     if (missingFields.length > 0) {
@@ -2906,38 +2904,6 @@ function App() {
       thumbnail: '',
       tags: [],
       kind: 'standard',
-      reviewers: [],
-      checks: [],
-      approvalHistory: [
-        { id: `created-${id}`, action: 'created', actor: '作成者', createdAt: new Date().toISOString() },
-      ],
-      inspectionImages: [],
-      steps: [],
-    }
-    void saveWorkflowManual(manual, '新規マニュアルをFirebaseへ保存しました')
-    setSelectedId(id)
-    setView('edit')
-  }
-
-  const createAbnormalManual = () => {
-    const id = `A-${Math.floor(1000 + Math.random() * 8999)}`
-    const manual: Manual = {
-      id,
-      title: '',
-      workName: '',
-      controlNo: '',
-      productName: '',
-      department: '',
-      owner: '',
-      status: 'draft',
-      version: 'v0.1',
-      duration: '分岐型',
-      updatedAt: new Date().toISOString().slice(0, 10),
-      videoUrl: '',
-      manualImages: [],
-      thumbnail: '',
-      tags: [],
-      kind: 'abnormal',
       decisionNodes: [],
       reviewers: [],
       checks: [],
@@ -2947,7 +2913,7 @@ function App() {
       inspectionImages: [],
       steps: [],
     }
-    void saveWorkflowManual(manual, '異常処置マニュアルをFirebaseへ保存しました')
+    void saveWorkflowManual(manual, '新規マニュアルをFirebaseへ保存しました')
     setSelectedId(id)
     setView('edit')
   }
@@ -3018,11 +2984,7 @@ function App() {
 
         <button className="primary-action" type="button" onClick={createManual}>
           <Plus size={18} aria-hidden="true" />
-          新規マニュアル
-        </button>
-        <button className="abnormal-create-action" type="button" onClick={createAbnormalManual}>
-          <GitBranch size={18} aria-hidden="true" />
-          異常処置を作成
+          新規手順書
         </button>
 
         <label className="search-box">
@@ -3067,7 +3029,7 @@ function App() {
             <p className="eyebrow">Firebase project: miyamaunitec-fb87a</p>
             <div className="manual-title-row">
               <h1>{selectedManual.title}</h1>
-              {isAbnormalManual && <span className="abnormal-badge">異常処置・分岐型</span>}
+              {decisionNodes.length > 0 && <span className="abnormal-badge">フローチャート</span>}
             </div>
           </div>
           <div className="manual-actions">
@@ -3134,15 +3096,13 @@ function App() {
               <Sparkles size={17} aria-hidden="true" />
               フラッシュテスト
             </button>
-            {isAbnormalManual && (
-              <button
-                className={view === 'decision' ? 'selected' : ''}
-                onClick={() => setView('decision')}
-              >
-                <GitBranch size={17} aria-hidden="true" />
-                処置フロー
-              </button>
-            )}
+            <button
+              className={view === 'decision' ? 'selected' : ''}
+              onClick={() => setView('decision')}
+            >
+              <GitBranch size={17} aria-hidden="true" />
+              フロー閲覧
+            </button>
           </nav>
         </header>
 
@@ -3679,23 +3639,22 @@ function App() {
               </div>
               </fieldset>
             </section>
-            {isAbnormalManual && (
-              <section className={`decision-authoring ${isEditingLocked ? 'locked-panel' : ''}`}>
+            <section className={`decision-authoring ${isEditingLocked ? 'locked-panel' : ''}`}>
                 <header className="decision-section-header">
                   <div>
-                    <p className="eyebrow">異常処置フロー</p>
+                    <p className="eyebrow">手順フロー</p>
                     <h2>フローチャートで作成</h2>
                   </div>
                 </header>
                 <details className="decision-advanced-tools">
-                  <summary>応用: 複数の処置をまとめて連結</summary>
-                  <section className="decision-chain-builder" aria-label="連続する処置の一括登録">
+                  <summary>応用: 複数の作業をまとめて連結</summary>
+                  <section className="decision-chain-builder" aria-label="連続する作業の一括登録">
                     <div>
                       <p className="eyebrow">連続登録</p>
-                      <h3>複数の処置を連結して追加</h3>
+                      <h3>複数の作業を連結して追加</h3>
                     </div>
                     <label>
-                      連結元の処置（任意）
+                      連結元の作業（任意）
                       <select
                         disabled={isEditingLocked}
                         value={decisionChainSourceId}
@@ -3708,10 +3667,10 @@ function App() {
                       </select>
                     </label>
                     <label className="decision-chain-titles">
-                      連結する処置
+                      連結する作業
                       <textarea
                         disabled={isEditingLocked}
-                        placeholder={'処置を1行ずつ入力\n例: 対象品を隔離\n例: 班長へ連絡\n例: 異常履歴を記録'}
+                        placeholder={'作業を1行ずつ入力\n例: 対象品を準備\n例: 設備を確認\n例: 作業結果を記録'}
                         value={decisionChainTitles}
                         onChange={(event) => setDecisionChainTitles(event.target.value)}
                       />
@@ -3726,7 +3685,7 @@ function App() {
                     </button>
                   </section>
                 </details>
-                <section className="decision-flowchart" id="decision-flowchart-print" aria-label="処置フロー図">
+                <section className="decision-flowchart" id="decision-flowchart-print" aria-label="手順フロー図">
                   <div className="flowchart-print-header" aria-hidden="true">
                     <div>
                       <p>ミヤマ工業動画マニュアル</p>
@@ -3790,9 +3749,9 @@ function App() {
                           <GitBranch size={16} aria-hidden="true" />
                           判断
                         </button>
-                        <button disabled={isEditingLocked} title="処置カードを追加" type="button" onClick={() => addDecisionNode('action')}>
+                        <button disabled={isEditingLocked} title="作業カードを追加" type="button" onClick={() => addDecisionNode('action')}>
                           <Plus size={16} aria-hidden="true" />
-                          処置
+                          作業
                         </button>
                         <button disabled={isEditingLocked} title="完了カードを追加" type="button" onClick={() => addDecisionNode('end')}>
                           <CheckCircle2 size={16} aria-hidden="true" />
@@ -3812,7 +3771,7 @@ function App() {
                   </div>
                   <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef}>
                     <svg
-                      aria-label="判断と処置のフローチャート"
+                      aria-label="判断と作業のフローチャート"
                       height={decisionFlowChart.height}
                       ref={flowchartSvgRef}
                       role="img"
@@ -3981,7 +3940,7 @@ function App() {
                             setFlowContextMenu(null)
                           }}
                         >
-                          処置カードを置く
+                          作業カードを置く
                         </button>
                         <button
                           type="button"
@@ -4023,7 +3982,7 @@ function App() {
                               setFlowContextMenu(null)
                             }}
                           >
-                            次の処置を追加
+                            次の作業を追加
                           </button>
                         )}
                         {flowContextNode.type === 'action' && (
@@ -4133,7 +4092,7 @@ function App() {
                             }))}
                           >
                             <option value="question">判断</option>
-                            <option value="action">処置</option>
+                            <option value="action">作業</option>
                             <option value="end">完了</option>
                           </select>
                         </label>
@@ -4141,7 +4100,7 @@ function App() {
                           <span>表示内容</span>
                           <input
                             disabled={isEditingLocked}
-                            placeholder="判断・処置の名称"
+                            placeholder="判断・作業の名称"
                             value={(decisionEditDraft ?? editingDecisionNode).title}
                             onChange={(event) => setDecisionEditDraft((current) => ({
                               ...(current ?? editingDecisionNode),
@@ -4257,7 +4216,7 @@ function App() {
                 <details className="decision-flow-details">
                   <summary>詳細設定</summary>
                   <div className="decision-authoring-layout">
-                  <ol className="decision-tree-list" aria-label="処置フローのツリー">
+                  <ol className="decision-tree-list" aria-label="手順フローのツリー">
                     {decisionNodes.map((node, index) => (
                       <li
                         className={`${node.id === decisionStartNodeId ? 'start-node' : ''} ${node.id === editingDecisionNode?.id ? 'selected-node' : ''}`}
@@ -4274,7 +4233,7 @@ function App() {
                               ? getDecisionBranches(node).map((branch) => `${branch.label}: ${decisionNodeMap.get(branch.nextNodeId ?? '')?.title ?? '未設定'}`).join(' / ')
                               : node.type === 'action'
                                 ? `次へ: ${decisionNodeMap.get(node.nextNodeId ?? '')?.title ?? '未設定'}`
-                                : '処置フロー終了'}
+                                : '手順フロー終了'}
                           </small>
                           <span className="decision-order">{index + 1}</span>
                         </button>
@@ -4296,7 +4255,7 @@ function App() {
                               }
                             >
                               <option value="question">YES／NO判断</option>
-                              <option value="action">処置</option>
+                              <option value="action">作業</option>
                               <option value="end">完了</option>
                             </select>
                           </label>
@@ -4332,7 +4291,7 @@ function App() {
                           </button>
                         </div>
                         <label>
-                          表示する判断・処置
+                          表示する判断・作業
                           <input
                             disabled={isEditingLocked}
                             value={node.title}
@@ -4463,7 +4422,7 @@ function App() {
                         {node.type === 'action' && (
                           <>
                             <label>
-                              共通の次の処置
+                              共通の次の作業
                               <select
                                 disabled={isEditingLocked}
                                 value={node.nextNodeId ?? ''}
@@ -4476,12 +4435,12 @@ function App() {
                               </select>
                             </label>
                             <details className="decision-conditional-next">
-                              <summary>応用: 選択肢ごとに次の処置を変える</summary>
+                              <summary>応用: 選択肢ごとに次の作業を変える</summary>
                               <div className="decision-conditional-body">
                                 <header>
                                   <div>
-                                    <strong>選択肢別の次の処置</strong>
-                                    <small>同じ処置に合流した後、選択肢によって進み先を変えられます</small>
+                                    <strong>選択肢別の次の作業</strong>
+                                    <small>同じ作業に合流した後、選択肢によって進み先を変えられます</small>
                                   </div>
                                   <button
                                     disabled={isEditingLocked || decisionBranchOptions.length === 0}
@@ -4510,7 +4469,7 @@ function App() {
                                         </select>
                                       </label>
                                       <label>
-                                        次の処置
+                                        次の作業
                                         <select
                                           disabled={isEditingLocked}
                                           value={condition.nextNodeId ?? ''}
@@ -4555,7 +4514,6 @@ function App() {
                   </div>
                 </details>
               </section>
-            )}
           </div>
         )}
 
@@ -4931,16 +4889,16 @@ function App() {
               <section className="manual-qr-panel" id="manual-qr-panel">
                 <div className="manual-qr-copy">
                   <p className="eyebrow">現場掲示用</p>
-                  <h2>{isAbnormalManual ? '処置フローのQRコード' : 'この作業のQRコード'}</h2>
+                  <h2>この作業のQRコード</h2>
                   <p>
-                    {isAbnormalManual
-                      ? '現場で読み取ると、スマホでYES／NOの処置フローを直接開けます。'
+                    {decisionNodes.length > 0
+                      ? '現場で読み取ると、スマホで手順フローを直接開けます。'
                       : '現場で読み取ると、このマニュアルの閲覧画面を直接開きます。'}
                   </p>
                   {!isPublished && <span className="qr-draft-note">公開前のマニュアルです</span>}
                 </div>
                 <QRCodeSVG
-                  aria-label={`${selectedManual.title}${isAbnormalManual ? 'の処置フロー' : ''}を開くQRコード`}
+                  aria-label={`${selectedManual.title}を開くQRコード`}
                   bgColor="#ffffff"
                   className="manual-qr-code"
                   fgColor="#17202f"
@@ -4965,13 +4923,13 @@ function App() {
           </div>
         )}
 
-        {view === 'decision' && isAbnormalManual && (
+        {view === 'decision' && (
           <div className="decision-review-view">
             <aside className="decision-review-tree">
               <header className="decision-section-header">
                 <div>
                   <p className="eyebrow">レビュー用ツリー</p>
-                  <h2>異常処置の全体像</h2>
+                  <h2>手順の全体像</h2>
                 </div>
                 <button type="button" onClick={resetDecisionReview}>
                   <RotateCcw size={16} aria-hidden="true" />
@@ -4999,7 +4957,7 @@ function App() {
                 <>
                   <div className="decision-runner-sheet">
                     <div className="decision-runner-progress">
-                      <span>処置確認</span>
+                      <span>手順確認</span>
                       <span>{decisionPath.length} / {decisionNodes.length}</span>
                     </div>
                     <div className="decision-runner-navigation">
@@ -5085,11 +5043,11 @@ function App() {
                             <>
                               {actionNext.matchedSelection && (
                                 <small className="decision-conditional-note">
-                                  「{actionNext.matchedSelection.label}」の選択に応じた次の処置へ進みます
+                                  「{actionNext.matchedSelection.label}」の選択に応じた次の作業へ進みます
                                 </small>
                               )}
                               <button className="decision-next-action" type="button" onClick={() => advanceDecision(actionNext.nextNodeId)}>
-                                処置を実施した。次へ進む
+                                作業を実施した。次へ進む
                               </button>
                             </>
                           )
@@ -5098,7 +5056,7 @@ function App() {
                       {activeDecisionNode.type === 'end' && (
                         <div className="decision-complete-state">
                           <CheckCircle2 size={30} aria-hidden="true" />
-                          <strong>処置フローを完了しました</strong>
+                          <strong>手順フローを完了しました</strong>
                           <button type="button" onClick={resetDecisionReview}>
                             最初から確認する
                           </button>
@@ -5110,8 +5068,8 @@ function App() {
               ) : (
                 <div className="decision-empty-state">
                   <GitBranch size={34} aria-hidden="true" />
-                  <h2>処置フローがありません</h2>
-                  <p>作成画面で判断または処置を追加してください。</p>
+                  <h2>手順フローがありません</h2>
+                  <p>作成画面で判断または作業を追加してください。</p>
                   <button type="button" onClick={() => setView('edit')}>作成画面へ</button>
                 </div>
               )}
