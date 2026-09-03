@@ -19,7 +19,6 @@ import {
   LockKeyhole,
   Maximize2,
   MousePointer2,
-  Paperclip,
   PlayCircle,
   Plus,
   Printer,
@@ -51,6 +50,8 @@ import miyamaLogo from './assets/miyama-logo.png'
 import { firebaseProjectId, isFirebaseConfigured } from './firebase'
 import DecisionBranchFields from './DecisionBranchFields'
 import DecisionFlowLabel from './DecisionFlowLabel'
+import DecisionFlowCardContent from './DecisionFlowCardContent'
+import { expandFlowCardPositions, getFlowCardLayout, getFlowCardPort } from './decisionFlowCards'
 import { getFlowLabelBox, getFlowLabelKey, getFlowLabelSize, splitDecisionFlowEdgeLabel } from './decisionFlowLabels'
 import { applyDecisionBranchDrafts, getDecisionBranches, type DecisionBranchDraft } from './decisionBranches'
 import {
@@ -237,6 +238,8 @@ type DecisionFlowLayoutNode = {
   node: DecisionNode
   x: number
   y: number
+  width: number
+  height: number
 }
 
 type DecisionFlowConnectionKind = 'branch' | 'next' | 'conditional'
@@ -359,20 +362,23 @@ function buildDecisionFlowChart(nodes: DecisionNode[], startNodeId: string | nul
   const maxLayerSize = Math.max(1, ...[...layers.values()].map((layer) => layer.length))
   let width = Math.max(720, 80 + (maxDepth + 1) * (nodeWidth + columnGap))
   let height = Math.max(240, 60 + maxLayerSize * (nodeHeight + rowGap))
-  const layoutNodes: DecisionFlowLayoutNode[] = []
+  let layoutNodes: DecisionFlowLayoutNode[] = []
 
   ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([depth, layer]) => {
     layer.forEach((node, index) => {
       layoutNodes.push({
         node,
+        width: getFlowCardLayout(node.title, node.type).width,
+        height: getFlowCardLayout(node.title, node.type).height,
         x: node.flowPosition?.x ?? 38 + depth * (nodeWidth + columnGap),
         y: node.flowPosition?.y ?? 30 + index * (nodeHeight + rowGap),
       })
     })
   })
 
-  width = Math.max(width, ...layoutNodes.map((layoutNode) => layoutNode.x + nodeWidth + 38))
-  height = Math.max(height, ...layoutNodes.map((layoutNode) => layoutNode.y + nodeHeight + 30))
+  layoutNodes = expandFlowCardPositions(layoutNodes)
+  width = Math.max(width, ...layoutNodes.map((layoutNode) => layoutNode.x + layoutNode.width + 38))
+  height = Math.max(height, ...layoutNodes.map((layoutNode) => layoutNode.y + layoutNode.height + 30))
 
   const layoutById = new Map(layoutNodes.map((item) => [item.node.id, item]))
   const rawEdges = layoutNodes.flatMap((from) => {
@@ -427,10 +433,10 @@ function getDecisionFlowEdgeGeometry(
   nodeWidth: number,
   nodeHeight: number,
 ): DecisionFlowEdgeGeometry {
-  const startX = edge.from.x + nodeWidth
-  const startY = edge.from.y + nodeHeight / 2 + getDecisionFlowPortOffset(edge.sourceIndex, edge.sourceCount)
-  const endX = edge.to.x
-  const endY = edge.to.y + nodeHeight / 2 + getDecisionFlowPortOffset(edge.targetIndex, edge.targetCount)
+  const fromBox = { ...edge.from, width: edge.from.width ?? nodeWidth, height: edge.from.height ?? nodeHeight }
+  const toBox = { ...edge.to, width: edge.to.width ?? nodeWidth, height: edge.to.height ?? nodeHeight }
+  const { x: startX, y: startY } = getFlowCardPort(edge.from.node.type, fromBox, 'right', getDecisionFlowPortOffset(edge.sourceIndex, edge.sourceCount))
+  const { x: endX, y: endY } = getFlowCardPort(edge.to.node.type, toBox, 'left', getDecisionFlowPortOffset(edge.targetIndex, edge.targetCount))
   const goesForward = endX > startX
   const laneOffset = getDecisionFlowPortOffset(edge.sourceIndex, edge.sourceCount) * 1.2
   const baseTurnX = goesForward ? (startX + endX) / 2 : Math.max(startX, endX) + 44
@@ -481,13 +487,6 @@ function doesDecisionEdgeIntersectNode(
   return horizontalIntersects(startX, turnX, startY)
     || verticalIntersects(turnX, startY, endY)
     || horizontalIntersects(turnX, endX, endY)
-}
-
-function splitDecisionFlowLabel(title: string) {
-  const label = title.trim() || '名称未設定'
-  const maxLineLength = 12
-  if (label.length <= maxLineLength) return [label]
-  return [label.slice(0, maxLineLength), `${label.slice(maxLineLength, maxLineLength * 2 - 1)}...`]
 }
 
 function getDecisionFlowLabelLayout(edge: DecisionFlowEdge, nodeWidth: number, nodeHeight: number) {
@@ -1314,7 +1313,7 @@ function App() {
     })
     const longestLabelWidth = Math.max(48, ...labelWidths)
     const forwardGaps = decisionFlowChart.edges
-      .map((edge) => edge.to.x - (edge.from.x + decisionFlowChart.nodeWidth))
+      .map((edge) => edge.to.x - (edge.from.x + edge.from.width))
       .filter((gap) => gap > 0)
     const narrowestForwardGap = Math.min(...forwardGaps, Infinity)
     const horizontalScale = Number.isFinite(narrowestForwardGap)
@@ -1511,15 +1510,16 @@ function App() {
     if (!isIndependent) return
 
     const position = { x: drag.currentX, y: drag.currentY }
+    const movedSize = getFlowCardLayout(movedNode.title, movedNode.type)
     const center = {
-      x: position.x + decisionFlowChart.nodeWidth / 2,
-      y: position.y + decisionFlowChart.nodeHeight / 2,
+      x: position.x + movedSize.width / 2,
+      y: position.y + movedSize.height / 2,
     }
     const edge = decisionFlowChart.edges
       .filter((candidate) => doesDecisionEdgeIntersectNode(
         candidate,
-        decisionFlowChart.nodeWidth,
-        decisionFlowChart.nodeHeight,
+        movedSize.width,
+        movedSize.height,
         position,
       ))
       .sort((left, right) =>
@@ -3073,6 +3073,120 @@ function App() {
     }
   }
 
+  const renderDecisionFlowChart = (readOnly = false) => (
+    <svg
+      aria-label="判断と作業のフローチャート"
+      height={decisionFlowChart.height}
+      ref={flowchartSvgRef}
+      role="img"
+      viewBox={`0 0 ${decisionFlowChart.width} ${decisionFlowChart.height}`}
+      width={decisionFlowChart.width}
+      onClick={() => {
+        setFlowContextMenu(null)
+        setFlowEdgeMenu(null)
+        if (flowTool === 'connect') setConnectingFromNodeId(null)
+      }}
+      onContextMenu={(event) => {
+        if (!readOnly) openFlowCanvasContextMenu(event)
+        else event.preventDefault()
+      }}
+      onPointerDown={startFlowCanvasPan}
+      onPointerMove={dragFlowNode}
+      onPointerLeave={stopFlowPointer}
+      onPointerUp={stopFlowPointer}
+    >
+      <defs>
+        <marker id="decision-flow-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+          <path d="M 0 0 L 8 4 L 0 8 z" />
+        </marker>
+        <marker id="decision-flow-arrow-yes" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+          <path d="M 0 0 L 8 4 L 0 8 z" fill="#15803d" />
+        </marker>
+        <marker id="decision-flow-arrow-no" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+          <path d="M 0 0 L 8 4 L 0 8 z" fill="#b91c1c" />
+        </marker>
+      </defs>
+      {decisionFlowChart.edges.map((edge) => {
+        const { startX, startY, turnX, endX, endY } = getDecisionFlowEdgeGeometry(
+          edge,
+          decisionFlowChart.nodeWidth,
+          decisionFlowChart.nodeHeight,
+        )
+        const markerId = edge.label === 'YES'
+          ? 'decision-flow-arrow-yes'
+          : edge.label === 'NO'
+            ? 'decision-flow-arrow-no'
+            : 'decision-flow-arrow'
+        const edgePath = `M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`
+        return (
+          <g
+            className={`decision-flow-edge ${edge.label.toLowerCase()}`}
+            key={`${edge.from.node.id}-${edge.sourceIndex}-${edge.to.node.id}-${edge.targetIndex}`}
+            onClick={readOnly ? undefined : (event) => openFlowEdgeMenu(edge, event)}
+          >
+            <path className="decision-flow-edge-hit" d={edgePath} />
+            <path d={edgePath} markerEnd={`url(#${markerId})`} />
+          </g>
+        )
+      })}
+      {decisionFlowChart.nodes.map((layoutNode) => {
+        const isSelected = layoutNode.node.id === (readOnly ? activeDecisionNode?.id : editingDecisionNode?.id)
+        const isStart = layoutNode.node.id === decisionStartNodeId
+        const isConnecting = layoutNode.node.id === connectingFromNodeId
+        const attachmentCount = layoutNode.node.media?.length ?? 0
+        return (
+          <g
+            aria-label={`${decisionNodeTypeLabels[layoutNode.node.type]}: ${layoutNode.node.title || '名称未設定'}${attachmentCount ? `、資料${attachmentCount}件` : ''}`}
+            className={`decision-flow-node ${layoutNode.node.type} ${isSelected ? 'selected' : ''} ${isStart ? 'start' : ''} ${isConnecting ? 'connecting-source' : ''}`}
+            key={layoutNode.node.id}
+            role={readOnly ? 'img' : 'button'}
+            tabIndex={readOnly ? undefined : 0}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (!readOnly) handleFlowNodeClick(layoutNode.node.id, true)
+            }}
+            onContextMenu={readOnly ? undefined : (event) => openFlowContextMenu(layoutNode.node.id, event)}
+            onKeyDown={(event) => {
+              if (!readOnly && (event.key === 'Enter' || event.key === ' ')) {
+                event.preventDefault()
+                handleFlowNodeClick(layoutNode.node.id)
+              }
+            }}
+            onPointerDown={readOnly ? undefined : (event) => startFlowNodeDrag(layoutNode.node.id, event)}
+          >
+            <DecisionFlowCardContent node={layoutNode.node} x={layoutNode.x} y={layoutNode.y} />
+          </g>
+        )
+      })}
+      <g className="decision-flow-label-layer">
+        {decisionFlowChart.edges.filter((edge) => edge.label.trim()).map((edge) => {
+          const { key, lines, base, box } = getDecisionFlowLabelLayout(edge, decisionFlowChart.nodeWidth, decisionFlowChart.nodeHeight)
+          return (
+            <DecisionFlowLabel
+              key={`${selectedManual.id}:${edge.from.node.id}:${key}`}
+              label={edge.label}
+              lines={lines}
+              box={box}
+              disabled={readOnly || isEditingLocked}
+              onDragStart={() => { setFlowContextMenu(null); setFlowEdgeMenu(null) }}
+              onOpen={(event) => openFlowEdgeMenu(edge, event)}
+              onMove={(position) => {
+                if (readOnly || isEditingLocked || (position.x === box.x && position.y === box.y)) return
+                updateDecisionNode(edge.from.node.id, {
+                  flowLabelOffsets: {
+                    ...edge.from.node.flowLabelOffsets,
+                    [key]: { x: position.x - base.x, y: position.y - base.y },
+                  },
+                })
+              }}
+            />
+          )
+        })}
+      </g>
+    </svg>
+  )
+
+
   return (
     <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' || view === 'guide' ? 'home-shell' : ''}`}>
       <aside className="sidebar" aria-label="動画マニュアル一覧">
@@ -4266,150 +4380,7 @@ function App() {
                     </div>
                   </div>
                   <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef}>
-                    <svg
-                      aria-label="判断と作業のフローチャート"
-                      height={decisionFlowChart.height}
-                      ref={flowchartSvgRef}
-                      role="img"
-                      viewBox={`0 0 ${decisionFlowChart.width} ${decisionFlowChart.height}`}
-                      width={decisionFlowChart.width}
-                      onClick={() => {
-                        setFlowContextMenu(null)
-                        setFlowEdgeMenu(null)
-                        if (flowTool === 'connect') setConnectingFromNodeId(null)
-                      }}
-                      onContextMenu={(event) => {
-                        openFlowCanvasContextMenu(event)
-                      }}
-                      onPointerDown={startFlowCanvasPan}
-                      onPointerMove={dragFlowNode}
-                      onPointerLeave={stopFlowPointer}
-                      onPointerUp={stopFlowPointer}
-                    >
-                      <defs>
-                        <marker id="decision-flow-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-                          <path d="M 0 0 L 8 4 L 0 8 z" />
-                        </marker>
-                        <marker id="decision-flow-arrow-yes" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-                          <path d="M 0 0 L 8 4 L 0 8 z" fill="#15803d" />
-                        </marker>
-                        <marker id="decision-flow-arrow-no" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-                          <path d="M 0 0 L 8 4 L 0 8 z" fill="#b91c1c" />
-                        </marker>
-                      </defs>
-                      {decisionFlowChart.edges.map((edge) => {
-                        const { startX, startY, turnX, endX, endY } = getDecisionFlowEdgeGeometry(
-                          edge,
-                          decisionFlowChart.nodeWidth,
-                          decisionFlowChart.nodeHeight,
-                        )
-                        const markerId = edge.label === 'YES'
-                          ? 'decision-flow-arrow-yes'
-                          : edge.label === 'NO'
-                            ? 'decision-flow-arrow-no'
-                            : 'decision-flow-arrow'
-                        const edgePath = `M ${startX} ${startY} H ${turnX} V ${endY} H ${endX}`
-                        return (
-                          <g
-                            className={`decision-flow-edge ${edge.label.toLowerCase()}`}
-                            key={`${edge.from.node.id}-${edge.sourceIndex}-${edge.to.node.id}-${edge.targetIndex}`}
-                            onClick={(event) => openFlowEdgeMenu(edge, event)}
-                          >
-                            <path className="decision-flow-edge-hit" d={edgePath} />
-                            <path d={edgePath} markerEnd={`url(#${markerId})`} />
-                          </g>
-                        )
-                      })}
-                      {decisionFlowChart.nodes.map((layoutNode) => {
-                        const isSelected = layoutNode.node.id === editingDecisionNode?.id
-                        const isStart = layoutNode.node.id === decisionStartNodeId
-                        const isConnecting = layoutNode.node.id === connectingFromNodeId
-                        const lines = splitDecisionFlowLabel(layoutNode.node.title)
-                        const attachmentCount = layoutNode.node.media?.length ?? 0
-                        return (
-                          <g
-                            aria-label={`${decisionNodeTypeLabels[layoutNode.node.type]}: ${layoutNode.node.title || '名称未設定'}${attachmentCount ? `、資料${attachmentCount}件` : ''}`}
-                            className={`decision-flow-node ${layoutNode.node.type} ${isSelected ? 'selected' : ''} ${isStart ? 'start' : ''} ${isConnecting ? 'connecting-source' : ''}`}
-                            key={layoutNode.node.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              handleFlowNodeClick(layoutNode.node.id, true)
-                            }}
-                            onContextMenu={(event) => openFlowContextMenu(layoutNode.node.id, event)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                handleFlowNodeClick(layoutNode.node.id)
-                              }
-                            }}
-                            onPointerDown={(event) => startFlowNodeDrag(layoutNode.node.id, event)}
-                          >
-                            <rect height={decisionFlowChart.nodeHeight} rx="9" width={decisionFlowChart.nodeWidth} x={layoutNode.x} y={layoutNode.y} />
-                            <text className="decision-flow-kind" x={layoutNode.x + 13} y={layoutNode.y + 21}>
-                              {decisionNodeTypeLabels[layoutNode.node.type]}
-                            </text>
-                            {lines.map((line, index) => (
-                              <text className="decision-flow-title" key={`${line}-${index}`} x={layoutNode.x + 13} y={layoutNode.y + 48 + index * 17}>
-                                {line}
-                              </text>
-                            ))}
-                            {attachmentCount > 0 && (
-                              <g className="decision-flow-attachment-mark">
-                                <title>{`資料 ${attachmentCount}件`}</title>
-                                <rect
-                                  height="24"
-                                  rx="5"
-                                  width="42"
-                                  x={layoutNode.x + decisionFlowChart.nodeWidth - 52}
-                                  y={layoutNode.y + 10}
-                                />
-                                <Paperclip
-                                  aria-hidden="true"
-                                  height="14"
-                                  width="14"
-                                  x={layoutNode.x + decisionFlowChart.nodeWidth - 46}
-                                  y={layoutNode.y + 15}
-                                />
-                                <text
-                                  className="decision-flow-attachment-count"
-                                  x={layoutNode.x + decisionFlowChart.nodeWidth - 16}
-                                  y={layoutNode.y + 27}
-                                >
-                                  {attachmentCount}
-                                </text>
-                              </g>
-                            )}
-                          </g>
-                        )
-                      })}
-                      <g className="decision-flow-label-layer">
-                        {decisionFlowChart.edges.filter((edge) => edge.label.trim()).map((edge) => {
-                          const { key, lines, base, box } = getDecisionFlowLabelLayout(edge, decisionFlowChart.nodeWidth, decisionFlowChart.nodeHeight)
-                          return (
-                            <DecisionFlowLabel
-                              key={`${selectedManual.id}:${edge.from.node.id}:${key}`}
-                              label={edge.label}
-                              lines={lines}
-                              box={box}
-                              disabled={isEditingLocked}
-                              onDragStart={() => { setFlowContextMenu(null); setFlowEdgeMenu(null) }}
-                              onOpen={(event) => openFlowEdgeMenu(edge, event)}
-                              onMove={(position) => {
-                                if (isEditingLocked || (position.x === box.x && position.y === box.y)) return
-                                updateDecisionNode(edge.from.node.id, {
-                                  flowLabelOffsets: {
-                                    ...edge.from.node.flowLabelOffsets,
-                                    [key]: { x: position.x - base.x, y: position.y - base.y },
-                                  },
-                                })
-                              }}
-                            />
-                          )
-                        })}
-                      </g>
-                    </svg>
+                    {renderDecisionFlowChart()}
                     {flowContextMenu && !flowContextNode && (
                       <div
                         className="decision-flow-context-menu"
@@ -5436,32 +5407,12 @@ function App() {
 
         {view === 'decision' && (
           <div className="decision-review-view">
-            <aside className="decision-review-tree">
-              <header className="decision-section-header">
-                <div>
-                  <p className="eyebrow">レビュー用ツリー</p>
-                  <h2>手順の全体像</h2>
-                </div>
-                <button type="button" onClick={resetDecisionReview}>
-                  <RotateCcw size={16} aria-hidden="true" />
-                  最初から
-                </button>
-              </header>
-              <ol className="decision-review-list">
-                {decisionNodes.map((node) => (
-                  <li
-                    className={`${decisionPath.includes(node.id) ? 'visited' : ''} ${activeDecisionNode?.id === node.id ? 'current' : ''}`}
-                    key={node.id}
-                  >
-                    <span className={`decision-type ${node.type}`}>{decisionNodeTypeLabels[node.type]}</span>
-                    <div>
-                      <strong>{node.title || '名称未設定'}</strong>
-                      <small>{node.detail || '説明を入力してください'}</small>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </aside>
+            <details className="decision-review-chart" open={!isQrViewer}>
+              <summary>フローチャート</summary>
+              <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef} aria-label="閲覧用フローチャート">
+                {renderDecisionFlowChart(true)}
+              </div>
+            </details>
 
             <section className="decision-runner" aria-live="polite">
               {activeDecisionNode ? (

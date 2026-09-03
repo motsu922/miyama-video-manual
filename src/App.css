@@ -230,8 +230,7 @@ button:disabled {
 .qr-viewer-shell .sidebar,
 .qr-viewer-shell .topbar,
 .qr-viewer-shell .firebase-note,
-.qr-viewer-shell .library-step-panel,
-.qr-viewer-shell .decision-review-tree {
+.qr-viewer-shell .library-step-panel {
   display: none;
 }
 
@@ -2416,33 +2415,33 @@ textarea {
   cursor: grabbing;
 }
 
-.decision-flow-node > rect {
+.decision-flow-node > .decision-flow-shape {
   fill: #eff6ff;
   stroke: #60a5fa;
   stroke-width: 2;
 }
 
-.decision-flow-node.action > rect {
+.decision-flow-node.action > .decision-flow-shape {
   fill: #fff7ed;
   stroke: #fb923c;
 }
 
-.decision-flow-node.end > rect {
+.decision-flow-node.end > .decision-flow-shape {
   fill: #f0fdf4;
   stroke: #4ade80;
 }
 
-.decision-flow-node.start > rect {
+.decision-flow-node.start > .decision-flow-shape {
   stroke-width: 3;
 }
 
-.decision-flow-node.selected > rect,
-.decision-flow-node:focus > rect {
+.decision-flow-node.selected > .decision-flow-shape,
+.decision-flow-node:focus > .decision-flow-shape {
   stroke: #0f766e;
   stroke-width: 4;
 }
 
-.decision-flow-node.connecting-source > rect {
+.decision-flow-node.connecting-source > .decision-flow-shape {
   stroke: #2563eb;
   stroke-dasharray: 8 4;
   stroke-width: 4;
@@ -2933,6 +2932,14 @@ textarea {
   font-weight: 800;
 }
 
+.decision-flow-node.question .decision-flow-title,
+.decision-flow-node.question .decision-flow-kind {
+  paint-order: stroke;
+  stroke: #f8fbff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
 .decision-flow-attachment-mark {
   pointer-events: none;
 }
@@ -2961,8 +2968,7 @@ textarea {
   align-items: start;
 }
 
-.decision-tree-list,
-.decision-review-list {
+.decision-tree-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -3499,7 +3505,7 @@ textarea {
 .decision-review-view {
   min-height: calc(100vh - 170px);
   display: grid;
-  grid-template-columns: minmax(290px, 0.8fr) minmax(420px, 1.2fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 1fr);
   gap: 18px;
 }
 
@@ -3513,7 +3519,6 @@ textarea {
   min-height: calc(100vh - 36px);
 }
 
-.decision-review-tree,
 .decision-runner {
   border: 1px solid #d6e3f0;
   border-radius: 8px;
@@ -3521,62 +3526,41 @@ textarea {
   box-shadow: 0 12px 34px rgba(20, 32, 52, 0.07);
 }
 
-.decision-review-tree {
+.decision-review-chart {
+  min-width: 0;
   align-self: start;
-  display: grid;
-  gap: 16px;
-  padding: 18px;
+  border-top: 1px solid #d6e3f0;
 }
 
-.decision-review-list {
-  display: grid;
-  gap: 9px;
-}
-
-.decision-review-list li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 9px;
-  padding: 11px;
-  border: 1px solid #e0e8f2;
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.decision-review-list li.visited {
-  border-color: #93c5fd;
-  background: #eff6ff;
-}
-
-.decision-review-list li.current {
-  border-color: #2563eb;
-  box-shadow: inset 3px 0 0 #2563eb;
-}
-
-.decision-review-list strong,
-.decision-review-list small {
-  display: block;
-}
-
-.decision-review-list strong {
+.decision-review-chart > summary {
+  padding: 16px 0;
   color: #17202f;
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
-.decision-review-list small {
-  margin-top: 3px;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.45;
+.decision-review-chart .decision-flowchart-scroll {
+  max-height: 65vh;
+}
+
+.decision-review-chart .decision-flow-node,
+.decision-review-chart .decision-flow-edge {
+  cursor: default;
+}
+
+.decision-review-chart .decision-flow-edge:hover > path:not(.decision-flow-edge-hit) {
+  stroke-width: 2.25;
 }
 
 .decision-runner {
+  min-width: 0;
   min-height: 460px;
   display: grid;
   align-content: center;
   justify-items: center;
   gap: 18px;
-  padding: clamp(28px, 6vw, 68px);
+  padding: 24px;
   text-align: center;
 }
 
@@ -3670,8 +3654,9 @@ textarea {
 .decision-runner-content h2 {
   max-width: 680px;
   color: #17202f;
-  font-size: clamp(24px, 3vw, 38px);
-  line-height: 1.35;
+  font-size: 24px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .decision-runner-instruction p {
