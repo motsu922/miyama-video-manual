@@ -9,6 +9,7 @@ import {
   Eye,
   FileVideo,
   GitBranch,
+  Home,
   Library,
   Languages,
   Link2,
@@ -630,7 +631,7 @@ async function composeAnnotatedImage(pending: PendingInspectionImage) {
 function App() {
   const [manuals, setManuals] = useState(initialManuals)
   const [selectedId, setSelectedId] = useState('')
-  const [view, setView] = useState<'edit' | 'approval' | 'library' | 'flash' | 'decision'>('edit')
+  const [view, setView] = useState<'home' | 'edit' | 'approval' | 'library' | 'flash' | 'decision'>('home')
   const [query, setQuery] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [pendingInspectionImage, setPendingInspectionImage] = useState<PendingInspectionImage | null>(null)
@@ -751,8 +752,15 @@ function App() {
     })
   }
 
-  const selectManual = (manualId: string) => {
-    if (manualId === selectedManual.id) return
+  const selectManual = (
+    manualId: string,
+    nextView: 'home' | 'edit' | 'approval' | 'library' | 'flash' | 'decision' =
+      view === 'home' ? 'edit' : view,
+  ) => {
+    if (manualId === selectedManual.id) {
+      setView(nextView)
+      return
+    }
     if (
       hasUnsavedChanges &&
       !window.confirm(`「${selectedManual.title || '名称未設定'}」に未保存の変更があります。保存せずに移動しますか？`)
@@ -760,6 +768,7 @@ function App() {
       return
     }
     setSelectedId(manualId)
+    setView(nextView)
   }
 
   useEffect(() => {
@@ -1018,6 +1027,21 @@ function App() {
       ),
     )
   }, [manuals, query])
+
+  const recentManuals = useMemo(
+    () => [...filteredManuals].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    [filteredManuals],
+  )
+
+  const homeMetrics = useMemo(
+    () => ({
+      total: manuals.length,
+      published: manuals.filter((manual) => manual.status === 'published').length,
+      review: manuals.filter((manual) => manual.status === 'review' || manual.status === 'approved').length,
+      draft: manuals.filter((manual) => manual.status === 'draft').length,
+    }),
+    [manuals],
+  )
 
   const activeStep = useMemo(() => {
     return selectedManual.steps.reduce((active, step) => {
@@ -2975,12 +2999,21 @@ function App() {
   }
 
   return (
-    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''}`}>
+    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' ? 'home-shell' : ''}`}>
       <aside className="sidebar" aria-label="動画マニュアル一覧">
         <div className="brand">
           <img src={miyamaLogo} alt="MIYAMA" />
           <span>動画マニュアル</span>
         </div>
+
+        <button
+          className={`sidebar-home-action ${view === 'home' ? 'active' : ''}`}
+          type="button"
+          onClick={() => setView('home')}
+        >
+          <Home size={18} aria-hidden="true" />
+          ホーム
+        </button>
 
         <button className="primary-action" type="button" onClick={createManual}>
           <Plus size={18} aria-hidden="true" />
@@ -2999,7 +3032,7 @@ function App() {
         <div className="manual-list">
           {filteredManuals.map((manual) => (
             <button
-              className={`manual-item ${manual.id === selectedManual.id ? 'active' : ''}`}
+              className={`manual-item ${view !== 'home' && manual.id === selectedManual.id ? 'active' : ''}`}
               key={manual.id}
               type="button"
               onClick={() => selectManual(manual.id)}
@@ -3024,87 +3057,211 @@ function App() {
       </aside>
 
       <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Firebase project: miyamaunitec-fb87a</p>
-            <div className="manual-title-row">
-              <h1>{selectedManual.title}</h1>
-              {decisionNodes.length > 0 && <span className="abnormal-badge">フローチャート</span>}
+        {view === 'home' ? (
+          <header className="home-topbar">
+            <div>
+              <p className="eyebrow">ミヤマ工業動画マニュアル</p>
+              <h1>手順書ホーム</h1>
+              <p>作業を選んで閲覧するか、手順書の作成・改訂を開始します。</p>
             </div>
-          </div>
-          <div className="manual-actions">
-            {!isPublished && (
+            <button className="home-create-button" type="button" onClick={createManual}>
+              <Plus size={18} aria-hidden="true" />
+              新規手順書
+            </button>
+          </header>
+        ) : (
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">Firebase project: miyamaunitec-fb87a</p>
+              <div className="manual-title-row">
+                <h1>{selectedManual.title || '名称未設定の手順書'}</h1>
+                {decisionNodes.length > 0 && <span className="abnormal-badge">フローチャート</span>}
+              </div>
+            </div>
+            <div className="manual-actions">
+              {!isPublished && (
+                <button
+                  className="visibility-toggle-button to-published"
+                  type="button"
+                  onClick={() => void toggleManualVisibility()}
+                >
+                  <Eye size={17} aria-hidden="true" />
+                  公開に切替
+                </button>
+              )}
               <button
-                className="visibility-toggle-button to-published"
+                className={`manual-save-button ${hasUnsavedChanges ? 'needs-save' : ''}`}
+                disabled={isEditingLocked}
                 type="button"
-                onClick={() => void toggleManualVisibility()}
+                onClick={persistSelectedManual}
               >
-                <Eye size={17} aria-hidden="true" />
-                公開に切替
+                <Save size={17} aria-hidden="true" />
+                手順書を保存
               </button>
-            )}
-            <button
-              className={`manual-save-button ${hasUnsavedChanges ? 'needs-save' : ''}`}
-              disabled={isEditingLocked}
-              type="button"
-              onClick={persistSelectedManual}
-            >
-              <Save size={17} aria-hidden="true" />
-              手順書を保存
-            </button>
-            <span className={`top-save-status ${hasUnsavedChanges ? 'unsaved' : 'saved'}`} aria-live="polite">
-              {hasUnsavedChanges ? '未保存' : '保存済み'}
-            </span>
-            {isPublished && (
-              <button className="revision-button" type="button" onClick={beginRevision}>
-                <RotateCcw size={17} aria-hidden="true" />
-                改訂を開始
+              <span className={`top-save-status ${hasUnsavedChanges ? 'unsaved' : 'saved'}`} aria-live="polite">
+                {hasUnsavedChanges ? '未保存' : '保存済み'}
+              </span>
+              {isPublished && (
+                <button className="revision-button" type="button" onClick={beginRevision}>
+                  <RotateCcw size={17} aria-hidden="true" />
+                  改訂を開始
+                </button>
+              )}
+              <button className="duplicate-button" type="button" onClick={duplicateManual}>
+                <Copy size={17} aria-hidden="true" />
+                複製
               </button>
-            )}
-            <button className="duplicate-button" type="button" onClick={duplicateManual}>
-              <Copy size={17} aria-hidden="true" />
-              複製
-            </button>
-            <button className="delete-button" type="button" onClick={removeManual}>
-              <Trash2 size={17} aria-hidden="true" />
-              削除
-            </button>
+              <button className="delete-button" type="button" onClick={removeManual}>
+                <Trash2 size={17} aria-hidden="true" />
+                削除
+              </button>
+            </div>
+            <nav className="view-tabs" aria-label="表示切り替え">
+              <button className={view === 'edit' ? 'selected' : ''} onClick={() => setView('edit')}>
+                <FileVideo size={17} aria-hidden="true" />
+                作成
+              </button>
+              <button
+                className={view === 'approval' ? 'selected' : ''}
+                onClick={() => setView('approval')}
+              >
+                <ShieldCheck size={17} aria-hidden="true" />
+                承認
+              </button>
+              <button
+                className={view === 'library' ? 'selected' : ''}
+                onClick={() => setView('library')}
+              >
+                <Library size={17} aria-hidden="true" />
+                閲覧
+              </button>
+              <button
+                className={view === 'flash' ? 'selected' : ''}
+                onClick={() => setView('flash')}
+              >
+                <Sparkles size={17} aria-hidden="true" />
+                フラッシュテスト
+              </button>
+              <button
+                className={view === 'decision' ? 'selected' : ''}
+                onClick={() => setView('decision')}
+              >
+                <GitBranch size={17} aria-hidden="true" />
+                フロー閲覧
+              </button>
+            </nav>
+          </header>
+        )}
+
+        {view === 'home' && (
+          <div className="home-view">
+            <section className="home-metrics" aria-label="手順書の登録状況">
+              <div>
+                <span>すべて</span>
+                <strong>{homeMetrics.total}</strong>
+              </div>
+              <div>
+                <span>公開中</span>
+                <strong>{homeMetrics.published}</strong>
+              </div>
+              <div>
+                <span>確認・承認中</span>
+                <strong>{homeMetrics.review}</strong>
+              </div>
+              <div>
+                <span>作成・改訂中</span>
+                <strong>{homeMetrics.draft}</strong>
+              </div>
+            </section>
+
+            <section className="home-library" aria-labelledby="home-library-title">
+              <header>
+                <div>
+                  <p className="eyebrow">手順書一覧</p>
+                  <h2 id="home-library-title">作業を選択</h2>
+                </div>
+                <label className="home-search-box">
+                  <Search size={18} aria-hidden="true" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="作業名、整理No、品名、部署で検索"
+                  />
+                </label>
+              </header>
+
+              {recentManuals.length > 0 ? (
+                <div className="home-manual-grid">
+                  {recentManuals.map((manual) => (
+                    <article className="home-manual-card" key={manual.id}>
+                      <div className="home-manual-preview">
+                        {manual.thumbnail ? (
+                          <img src={manual.thumbnail} alt="" />
+                        ) : (
+                          <span aria-hidden="true">
+                            <GitBranch size={34} />
+                          </span>
+                        )}
+                        <b className={`home-status status-${manual.status}`}>{statusLabels[manual.status]}</b>
+                      </div>
+                      <div className="home-manual-content">
+                        <div>
+                          <h3>{manual.title || manual.workName || '名称未設定の手順書'}</h3>
+                          <p>{manual.productName || '品名未設定'}</p>
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>整理No</dt>
+                            <dd>{manual.controlNo || '-'}</dd>
+                          </div>
+                          <div>
+                            <dt>部署</dt>
+                            <dd>{manual.department || '-'}</dd>
+                          </div>
+                          <div>
+                            <dt>更新日</dt>
+                            <dd>{manual.updatedAt || '-'}</dd>
+                          </div>
+                        </dl>
+                        <div className="home-manual-actions">
+                          <button type="button" onClick={() => selectManual(manual.id, 'edit')}>
+                            <FileVideo size={17} aria-hidden="true" />
+                            編集
+                          </button>
+                          <button
+                            className="primary-view"
+                            type="button"
+                            onClick={() =>
+                              selectManual(
+                                manual.id,
+                                (manual.decisionNodes?.length ?? 0) > 0 ? 'decision' : 'library',
+                              )
+                            }
+                          >
+                            <Eye size={17} aria-hidden="true" />
+                            閲覧
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="home-empty-state">
+                  <GitBranch size={36} aria-hidden="true" />
+                  <h2>{manuals.length > 0 ? '条件に一致する手順書がありません' : '最初の手順書を作成します'}</h2>
+                  <p>{manuals.length > 0 ? '検索条件を変えてください。' : 'フローチャートに作業と判断を並べて作成できます。'}</p>
+                  {manuals.length === 0 && (
+                    <button type="button" onClick={createManual}>
+                      <Plus size={18} aria-hidden="true" />
+                      新規手順書
+                    </button>
+                  )}
+                </div>
+              )}
+            </section>
           </div>
-          <nav className="view-tabs" aria-label="表示切り替え">
-            <button className={view === 'edit' ? 'selected' : ''} onClick={() => setView('edit')}>
-              <FileVideo size={17} aria-hidden="true" />
-              作成
-            </button>
-            <button
-              className={view === 'approval' ? 'selected' : ''}
-              onClick={() => setView('approval')}
-            >
-              <ShieldCheck size={17} aria-hidden="true" />
-              承認
-            </button>
-            <button
-              className={view === 'library' ? 'selected' : ''}
-              onClick={() => setView('library')}
-            >
-              <Library size={17} aria-hidden="true" />
-              閲覧
-            </button>
-            <button
-              className={view === 'flash' ? 'selected' : ''}
-              onClick={() => setView('flash')}
-            >
-              <Sparkles size={17} aria-hidden="true" />
-              フラッシュテスト
-            </button>
-            <button
-              className={view === 'decision' ? 'selected' : ''}
-              onClick={() => setView('decision')}
-            >
-              <GitBranch size={17} aria-hidden="true" />
-              フロー閲覧
-            </button>
-          </nav>
-        </header>
+        )}
 
         {view === 'edit' && (
           <div className="editor-grid">
