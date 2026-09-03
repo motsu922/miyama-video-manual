@@ -14,6 +14,26 @@ export function getFlowCardLayout(title: string, type: DecisionNodeType) {
   return { lines, width: 210, height: Math.max(94, 50 + lines.length * 18), textX: 13 }
 }
 
+export function getFlowCardTextLayout(layout: ReturnType<typeof getFlowCardLayout>, type: DecisionNodeType) {
+  const { width, height, lines, textX } = layout
+  if (type === 'question') {
+    const titleY = height / 2 - (lines.length - 1) * 9
+    return {
+      kindX: width / 2, kindY: titleY - 20,
+      titleX: width / 2, titleY,
+      anchor: 'middle' as const, baseline: 'central' as const,
+      markX: width - 52, markY: 4, markHeight: 20,
+    }
+  }
+  const kindY = type === 'action' ? 21 : (height - (32 + lines.length * 18)) / 2 + 12
+  return {
+    kindX: textX, kindY, titleX: textX, titleY: kindY + 27,
+    anchor: 'start' as const, baseline: 'auto' as const,
+    markX: textX + (type === 'action' ? 184 : 156) - 42,
+    markY: kindY - 16, markHeight: 24,
+  }
+}
+
 // Expand only the space needed by larger shapes; keep the order of existing rows and columns.
 export function expandFlowCardPositions<T extends { x: number; y: number; width: number; height: number }>(items: T[]): T[] {
   let result = items.map((item) => ({ ...item }))
@@ -35,10 +55,20 @@ export function expandFlowCardPositions<T extends { x: number; y: number; width:
   return result
 }
 
+export function getFlowCardCornerRadius(width: number, height: number) {
+  return Math.min(20, width / 2, height / 2)
+}
+
 export function getFlowCardPort(type: DecisionNodeType, box: { x: number; y: number; width: number; height: number }, side: 'left' | 'right', offset = 0) {
   const dy = Math.max(-box.height / 2, Math.min(box.height / 2, offset))
   const ratio = Math.abs(dy) / (box.height / 2)
-  const radius = box.width / 2 * (type === 'question' ? 1 - ratio : type === 'end' ? Math.sqrt(1 - ratio * ratio) : 1)
+  let radius = box.width / 2
+  if (type === 'question') radius *= 1 - ratio
+  else if (type === 'end') {
+    const corner = getFlowCardCornerRadius(box.width, box.height)
+    const cornerOffset = Math.max(0, Math.abs(dy) - (box.height / 2 - corner))
+    radius -= corner - Math.sqrt(Math.max(0, corner * corner - cornerOffset * cornerOffset))
+  }
   return { x: box.x + box.width / 2 + (side === 'right' ? radius : -radius), y: box.y + box.height / 2 + dy }
 }
 

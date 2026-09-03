@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Flow card alignment test</title></head>
+  <body style="margin:0;background:#f8fbff">
+    <div id="root"></div>
+    <script type="module">
+      import React from 'react';
+      import { createRoot } from 'react-dom/client';
+      import CardContent from '/src/DecisionFlowCardContent.tsx';
+      import { getFlowCardLayout } from '/src/decisionFlowCards.ts';
+      import '/src/App.css';
+      const titles = ['異常内容を確認', 'かんばん同士の品番が一致していることを確認してから製品を取り出し、完成品シュートに流して記録を残す'];
+      const nodes = ['question', 'action', 'end'].flatMap(type => titles.map((title, i) => ({
+        id: `${type}-${i}`, type, title, detail: '', media: [{ id: 'test', kind: 'image', name: 'test', url: '', uploadedAt: '' }],
+      })));
+      let y = 24;
+      const cards = nodes.map(node => {
+        const box = getFlowCardLayout(node.title, node.type);
+        const row = React.createElement('g', { key: node.id, className: `decision-flow-node ${node.type}`, 'data-test-id': node.id }, React.createElement(CardContent, { node, x: 36, y }));
+        y += box.height + 32;
+        return row;
+      });
+      createRoot(document.getElementById('root')).render(React.createElement('svg', { width: 330, height: y, viewBox: `0 0 330 ${y}`, 'aria-label': 'カード文字位置のテスト' }, cards));
+    </script>
+  </body>
+</html>
+
