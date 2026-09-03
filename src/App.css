@@ -1317,6 +1317,7 @@ textarea {
 
 .decision-authoring {
   grid-column: 1 / -1;
+  order: -1;
   display: grid;
   gap: 16px;
   padding: 18px;
@@ -3584,7 +3585,7 @@ textarea {
     margin-top: 4px;
     margin-left: 2mm;
     color: #17202f;
-    content: '異常処置フローチャート';
+    content: '手順フローチャート';
     font-size: 20px;
     font-weight: 800;
   }
