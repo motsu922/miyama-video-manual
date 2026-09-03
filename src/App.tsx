@@ -1779,6 +1779,7 @@ function App() {
       ...sourceNode,
       id: `decision-copy-${createdAt}`,
       title: sourceNode.title || '名称未設定',
+      sourceStepId: undefined,
       flowPosition: {
         x: position.x + 34,
         y: position.y + 34,
@@ -2571,6 +2572,46 @@ function App() {
         (left, right) => parseStepTime(left.time) - parseStepTime(right.time),
       ),
     })
+  }
+
+  const addStepToDecisionFlow = (step: Step) => {
+    if (isEditingLocked) return
+
+    const existingNode = decisionNodes.find((node) => node.sourceStepId === step.id)
+    if (existingNode) {
+      updateManual({
+        decisionNodes: decisionNodes.map((node) =>
+          node.id === existingNode.id
+            ? { ...node, title: step.title || '名称未設定の作業', detail: step.detail }
+            : node,
+        ),
+      })
+      setSelectedDecisionNodeId(existingNode.id)
+      setFirebaseMessage(`「${step.title || '名称未設定の作業'}」をフローチャートへ更新しました`)
+      return
+    }
+
+    const lowestNodeY = Math.max(
+      -110,
+      ...decisionFlowChart.nodes.map((item) => item.y),
+    )
+    const node: DecisionNode = {
+      id: `decision-step-${step.id}-${Date.now()}`,
+      type: 'action',
+      title: step.title || '名称未設定の作業',
+      detail: step.detail,
+      sourceStepId: step.id,
+      flowPosition: {
+        x: 38,
+        y: lowestNodeY + decisionFlowChart.nodeHeight + 38,
+      },
+    }
+    updateManual({
+      decisionNodes: [...decisionNodes, node],
+      decisionStartNodeId: decisionStartNodeId ?? node.id,
+    })
+    setSelectedDecisionNodeId(node.id)
+    setFirebaseMessage(`「${node.title}」をフローチャートへ追加しました`)
   }
 
   const removeStep = (stepId: number) => {
@@ -3591,7 +3632,7 @@ function App() {
               )}
               <fieldset className="editor-fieldset" disabled={isEditingLocked}>
               <div className="section-heading">
-                <h2>検査基本情報</h2>
+                <h2>基本情報</h2>
               </div>
               <div className="field-row three-fields">
                 <label>
@@ -3687,6 +3728,11 @@ function App() {
                   </span>
                 </div>
               </section>
+              </fieldset>
+            </section>
+
+            <section className={`chapter-panel ${isEditingLocked ? 'locked-panel' : ''}`}>
+              <fieldset className="editor-fieldset" disabled={isEditingLocked}>
               <div className="section-heading">
                 <h2>チャプター手順</h2>
                 <button disabled={isEditingLocked} type="button" onClick={addStep}>
@@ -3751,6 +3797,19 @@ function App() {
                         }}
                       />
                     </label>
+                    <div className="step-flow-action" onClick={(event) => event.stopPropagation()}>
+                      <button
+                        className={decisionNodes.some((node) => node.sourceStepId === step.id) ? 'linked' : ''}
+                        disabled={isEditingLocked}
+                        type="button"
+                        onClick={() => addStepToDecisionFlow(step)}
+                      >
+                        <GitBranch size={17} aria-hidden="true" />
+                        {decisionNodes.some((node) => node.sourceStepId === step.id)
+                          ? 'フローを更新'
+                          : 'フローへ追加'}
+                      </button>
+                    </div>
                     <section
                       className="inspection-panel step-inspection-panel"
                       onClick={(event) => event.stopPropagation()}

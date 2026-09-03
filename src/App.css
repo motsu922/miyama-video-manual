@@ -598,6 +598,7 @@ h2 {
 
 .video-panel,
 .form-panel,
+.chapter-panel,
 .status-panel,
 .review-panel,
 .viewer-panel,
@@ -893,6 +894,22 @@ h2 {
 
 .form-panel {
   display: grid;
+  gap: 14px;
+}
+
+.editor-grid > .form-panel {
+  grid-column: 1 / -1;
+  order: 1;
+}
+
+.editor-grid > .video-panel {
+  order: 3;
+}
+
+.chapter-panel {
+  order: 3;
+  display: grid;
+  align-content: start;
   gap: 14px;
 }
 
@@ -1615,7 +1632,7 @@ textarea {
 
 .decision-authoring {
   grid-column: 1 / -1;
-  order: -1;
+  order: 2;
   display: grid;
   gap: 16px;
   padding: 18px;
@@ -3214,6 +3231,32 @@ textarea {
 .step-delete:hover:not(:disabled) {
   border-color: #ef4444;
   background: #fef2f2;
+}
+
+.step-flow-action {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.step-flow-action button {
+  min-height: 38px;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+.step-flow-action button.linked {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
 }
 
 .status-panel,

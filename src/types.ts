@@ -106,6 +106,7 @@ export type DecisionNode = {
   type: DecisionNodeType
   title: string
   detail: string
+  sourceStepId?: number
   flowPosition?: {
     x: number
     y: number
