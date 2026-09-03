@@ -4,10 +4,12 @@ import {
   ArrowUp,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
   Copy,
   Eye,
   FileVideo,
+  Folder,
   GitBranch,
   Home,
   Library,
@@ -1032,6 +1034,21 @@ function App() {
     () => [...filteredManuals].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     [filteredManuals],
   )
+
+  const homeManualGroups = useMemo(() => {
+    const groups = new Map<string, Manual[]>()
+    recentManuals.forEach((manual) => {
+      const department = manual.department.trim() || '部署未設定'
+      groups.set(department, [...(groups.get(department) ?? []), manual])
+    })
+    return [...groups.entries()]
+      .map(([department, departmentManuals]) => ({ department, manuals: departmentManuals }))
+      .sort((left, right) => {
+        if (left.department === '部署未設定') return 1
+        if (right.department === '部署未設定') return -1
+        return left.department.localeCompare(right.department, 'ja')
+      })
+  }, [recentManuals])
 
   const homeMetrics = useMemo(
     () => ({
@@ -3232,59 +3249,77 @@ function App() {
               </header>
 
               {recentManuals.length > 0 ? (
-                <div className="home-manual-grid">
-                  {recentManuals.map((manual) => (
-                    <article className="home-manual-card" key={manual.id}>
-                      <div className="home-manual-preview">
-                        {manual.thumbnail ? (
-                          <img src={manual.thumbnail} alt="" />
-                        ) : (
-                          <span aria-hidden="true">
-                            <GitBranch size={34} />
-                          </span>
-                        )}
-                        <b className={`home-status status-${manual.status}`}>{statusLabels[manual.status]}</b>
+                <div className="home-department-groups">
+                  {homeManualGroups.map((group, groupIndex) => (
+                    <details
+                      className="home-department-folder"
+                      key={group.department}
+                      open={query.trim().length > 0 || groupIndex === 0}
+                    >
+                      <summary>
+                        <span className="home-folder-icon" aria-hidden="true">
+                          <Folder size={20} />
+                        </span>
+                        <strong>{group.department}</strong>
+                        <small>{group.manuals.length} 件</small>
+                        <ChevronDown className="home-folder-chevron" size={19} aria-hidden="true" />
+                      </summary>
+                      <div className="home-manual-grid">
+                        {group.manuals.map((manual) => (
+                          <article className="home-manual-card" key={manual.id}>
+                            <div className="home-manual-preview">
+                              {manual.thumbnail ? (
+                                <img src={manual.thumbnail} alt="" />
+                              ) : (
+                                <span aria-hidden="true">
+                                  <GitBranch size={34} />
+                                </span>
+                              )}
+                              <b className={`home-status status-${manual.status}`}>{statusLabels[manual.status]}</b>
+                            </div>
+                            <div className="home-manual-content">
+                              <div>
+                                <h3>{manual.title || manual.workName || '名称未設定の手順書'}</h3>
+                                <p>{manual.productName || '品名未設定'}</p>
+                              </div>
+                              <dl>
+                                <div>
+                                  <dt>整理No</dt>
+                                  <dd>{manual.controlNo || '-'}</dd>
+                                </div>
+                                <div>
+                                  <dt>部署</dt>
+                                  <dd>{manual.department || '-'}</dd>
+                                </div>
+                                <div>
+                                  <dt>更新日</dt>
+                                  <dd>{manual.updatedAt || '-'}</dd>
+                                </div>
+                              </dl>
+                              <div className="home-manual-actions">
+                                <button type="button" onClick={() => selectManual(manual.id, 'edit')}>
+                                  <FileVideo size={17} aria-hidden="true" />
+                                  編集
+                                </button>
+                                <button
+                                  className="primary-view"
+                                  type="button"
+                                  onClick={() =>
+                                    selectManual(
+                                      manual.id,
+                                      (manual.decisionNodes?.length ?? 0) > 0 ? 'decision' : 'library',
+                                    )
+                                  }
+                                >
+                                  <Eye size={17} aria-hidden="true" />
+                                  閲覧
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
                       </div>
-                      <div className="home-manual-content">
-                        <div>
-                          <h3>{manual.title || manual.workName || '名称未設定の手順書'}</h3>
-                          <p>{manual.productName || '品名未設定'}</p>
-                        </div>
-                        <dl>
-                          <div>
-                            <dt>整理No</dt>
-                            <dd>{manual.controlNo || '-'}</dd>
-                          </div>
-                          <div>
-                            <dt>部署</dt>
-                            <dd>{manual.department || '-'}</dd>
-                          </div>
-                          <div>
-                            <dt>更新日</dt>
-                            <dd>{manual.updatedAt || '-'}</dd>
-                          </div>
-                        </dl>
-                        <div className="home-manual-actions">
-                          <button type="button" onClick={() => selectManual(manual.id, 'edit')}>
-                            <FileVideo size={17} aria-hidden="true" />
-                            編集
-                          </button>
-                          <button
-                            className="primary-view"
-                            type="button"
-                            onClick={() =>
-                              selectManual(
-                                manual.id,
-                                (manual.decisionNodes?.length ?? 0) > 0 ? 'decision' : 'library',
-                              )
-                            }
-                          >
-                            <Eye size={17} aria-hidden="true" />
-                            閲覧
-                          </button>
-                        </div>
-                      </div>
-                    </article>
+                    </details>
                   ))}
                 </div>
               ) : (

@@ -375,6 +375,84 @@ button:disabled {
   color: #17202f;
 }
 
+.home-department-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.home-department-folder {
+  min-width: 0;
+}
+
+.home-department-folder > summary {
+  min-height: 52px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #17202f;
+  cursor: pointer;
+  list-style: none;
+}
+
+.home-department-folder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.home-department-folder > summary:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.home-folder-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.home-department-folder > summary strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-department-folder > summary small {
+  border-radius: 6px;
+  padding: 4px 7px;
+  background: #eef2f7;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.home-folder-chevron {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: #64748b;
+  transition: transform 0.18s ease;
+}
+
+.home-department-folder[open] .home-folder-chevron {
+  transform: rotate(180deg);
+}
+
+.home-department-folder > .home-manual-grid {
+  margin-top: 12px;
+  padding-left: 20px;
+  border-left: 2px solid #dbe2ea;
+}
+
 .home-manual-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -4383,6 +4461,10 @@ textarea {
 
   .home-search-box {
     width: 100%;
+  }
+
+  .home-department-folder > .home-manual-grid {
+    padding-left: 8px;
   }
 
   .home-metrics {
