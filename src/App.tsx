@@ -3130,6 +3130,10 @@ function App() {
         ) : (
           <header className="topbar">
             <div>
+              <button className="topbar-home-button" type="button" onClick={() => setView('home')}>
+                <ArrowLeft size={17} aria-hidden="true" />
+                手順書ホームへ
+              </button>
               <p className="eyebrow">Firebase project: miyamaunitec-fb87a</p>
               <div className="manual-title-row">
                 <h1>{selectedManual.title || '名称未設定の手順書'}</h1>

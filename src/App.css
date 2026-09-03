@@ -248,6 +248,27 @@ button:disabled {
   margin-bottom: 22px;
 }
 
+.topbar-home-button {
+  min-height: 36px;
+  margin-bottom: 10px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.topbar-home-button:hover {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
 .home-topbar {
   min-height: 106px;
   margin: -28px -28px 0;
