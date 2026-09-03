@@ -633,7 +633,9 @@ async function composeAnnotatedImage(pending: PendingInspectionImage) {
 function App() {
   const [manuals, setManuals] = useState(initialManuals)
   const [selectedId, setSelectedId] = useState('')
-  const [view, setView] = useState<'home' | 'edit' | 'approval' | 'library' | 'flash' | 'decision'>('home')
+  const [view, setView] = useState<'home' | 'guide' | 'edit' | 'approval' | 'library' | 'flash' | 'decision'>(() =>
+    new URLSearchParams(window.location.search).get('guide') === '1' ? 'guide' : 'home',
+  )
   const [query, setQuery] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [pendingInspectionImage, setPendingInspectionImage] = useState<PendingInspectionImage | null>(null)
@@ -757,7 +759,7 @@ function App() {
   const selectManual = (
     manualId: string,
     nextView: 'home' | 'edit' | 'approval' | 'library' | 'flash' | 'decision' =
-      view === 'home' ? 'edit' : view,
+      view === 'home' || view === 'guide' ? 'edit' : view,
   ) => {
     if (manualId === selectedManual.id) {
       setView(nextView)
@@ -3057,7 +3059,7 @@ function App() {
   }
 
   return (
-    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' ? 'home-shell' : ''}`}>
+    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' || view === 'guide' ? 'home-shell' : ''}`}>
       <aside className="sidebar" aria-label="動画マニュアル一覧">
         <div className="brand">
           <img src={miyamaLogo} alt="MIYAMA" />
@@ -3071,6 +3073,15 @@ function App() {
         >
           <Home size={18} aria-hidden="true" />
           ホーム
+        </button>
+
+        <button
+          className={`sidebar-home-action ${view === 'guide' ? 'active' : ''}`}
+          type="button"
+          onClick={() => setView('guide')}
+        >
+          <BookOpen size={18} aria-hidden="true" />
+          運用マニュアル
         </button>
 
         <button className="primary-action" type="button" onClick={createManual}>
@@ -3122,10 +3133,28 @@ function App() {
               <h1>手順書ホーム</h1>
               <p>作業を選んで閲覧するか、手順書の作成・改訂を開始します。</p>
             </div>
-            <button className="home-create-button" type="button" onClick={createManual}>
-              <Plus size={18} aria-hidden="true" />
-              新規手順書
-            </button>
+            <div className="home-topbar-actions">
+              <button className="home-guide-button" type="button" onClick={() => setView('guide')}>
+                <BookOpen size={18} aria-hidden="true" />
+                運用マニュアル
+              </button>
+              <button className="home-create-button" type="button" onClick={createManual}>
+                <Plus size={18} aria-hidden="true" />
+                新規手順書
+              </button>
+            </div>
+          </header>
+        ) : view === 'guide' ? (
+          <header className="home-topbar guide-topbar">
+            <div>
+              <button className="topbar-home-button" type="button" onClick={() => setView('home')}>
+                <ArrowLeft size={17} aria-hidden="true" />
+                手順書ホームへ
+              </button>
+              <p className="eyebrow">はじめて使う方へ</p>
+              <h1>運用マニュアル</h1>
+              <p>手順書を作成して、現場へ公開・改訂するまでの基本操作です。</p>
+            </div>
           </header>
         ) : (
           <header className="topbar">
@@ -3340,6 +3369,93 @@ function App() {
                 </div>
               )}
             </section>
+          </div>
+        )}
+
+        {view === 'guide' && (
+          <div className="guide-view">
+            <section className="guide-intro" aria-labelledby="guide-flow-title">
+              <div>
+                <p className="eyebrow">基本の流れ</p>
+                <h2 id="guide-flow-title">5つの操作で現場へ公開</h2>
+              </div>
+              <p>作成途中はこまめに保存し、内容を確認してから公開してください。</p>
+            </section>
+
+            <ol className="guide-steps">
+              <li>
+                <span>1</span>
+                <div>
+                  <h3>新しい手順書を作る</h3>
+                  <p>ホームの「新規手順書」を押し、作業名・整理No・品名・部署を入力します。</p>
+                </div>
+              </li>
+              <li>
+                <span>2</span>
+                <div>
+                  <h3>フローチャートと資料を登録</h3>
+                  <p>作業・判断・完了カードを配置して線で接続します。必要な動画や写真は各手順へ追加します。</p>
+                </div>
+              </li>
+              <li>
+                <span>3</span>
+                <div>
+                  <h3>手順書を保存</h3>
+                  <p>画面上部の「手順書を保存」を押し、表示が「保存済み」になったことを確認します。</p>
+                </div>
+              </li>
+              <li>
+                <span>4</span>
+                <div>
+                  <h3>内容を確認して公開</h3>
+                  <p>「閲覧」または「フロー閲覧」で現場表示を確認し、「公開に切替」を押します。</p>
+                </div>
+              </li>
+              <li>
+                <span>5</span>
+                <div>
+                  <h3>QRコードを現場へ掲示</h3>
+                  <p>公開した手順書のQRコードを印刷し、対象設備や作業場所へ掲示します。</p>
+                </div>
+              </li>
+            </ol>
+
+            <section className="guide-section" aria-labelledby="guide-status-title">
+              <header>
+                <p className="eyebrow">公開状態</p>
+                <h2 id="guide-status-title">状態の見方</h2>
+              </header>
+              <div className="guide-status-list">
+                <div>
+                  <b className="guide-status-draft">作成・改訂中</b>
+                  <p>内容を編集できる状態です。現場掲示用QRからは最新版として案内しません。</p>
+                </div>
+                <div>
+                  <b className="guide-status-published">公開中</b>
+                  <p>現場で利用する正式版です。変更するときは「改訂を開始」を押します。</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="guide-section" aria-labelledby="guide-daily-title">
+              <header>
+                <p className="eyebrow">日常運用</p>
+                <h2 id="guide-daily-title">安全に運用するための確認</h2>
+              </header>
+              <ul className="guide-checklist">
+                <li><CheckCircle2 size={20} aria-hidden="true" />公開前に動画・画像・分岐先を最後まで確認する</li>
+                <li><CheckCircle2 size={20} aria-hidden="true" />作業内容が変わったら、古い手順書を直接使わず改訂する</li>
+                <li><CheckCircle2 size={20} aria-hidden="true" />QRコードを掲示した場所と対象設備を記録しておく</li>
+                <li><CheckCircle2 size={20} aria-hidden="true" />不要になった手順書は、誤使用防止のため公開状態を解除する</li>
+              </ul>
+            </section>
+
+            <div className="guide-footer-action">
+              <button type="button" onClick={() => setView('home')}>
+                <Home size={18} aria-hidden="true" />
+                手順書ホームへ戻る
+              </button>
+            </div>
           </div>
         )}
 
