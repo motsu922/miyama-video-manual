@@ -5509,7 +5509,7 @@ function App() {
                                 </small>
                               )}
                               <button className="decision-next-action" type="button" onClick={() => advanceDecision(actionNext.nextNodeId)}>
-                                作業を実施した。次へ進む
+                                次へ進む
                               </button>
                             </>
                           )
