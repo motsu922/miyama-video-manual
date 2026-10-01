@@ -21,7 +21,9 @@ import {
   MousePointer2,
   PlayCircle,
   Plus,
+  Pencil,
   Printer,
+  QrCode,
   Save,
   Search,
   Send,
@@ -629,6 +631,7 @@ function App() {
     new URLSearchParams(window.location.search).get('guide') === '1' ? 'guide' : 'home',
   )
   const [query, setQuery] = useState('')
+  const [pendingQrManualId, setPendingQrManualId] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [pendingInspectionImage, setPendingInspectionImage] = useState<PendingInspectionImage | null>(null)
   const [fullscreenViewerImage, setFullscreenViewerImage] = useState<{ src: string; alt: string } | null>(null)
@@ -758,17 +761,31 @@ function App() {
   ) => {
     if (manualId === selectedManual.id) {
       setView(nextView)
-      return
+      return true
     }
     if (
       hasUnsavedChanges &&
       !window.confirm(`「${selectedManual.title || '名称未設定'}」に未保存の変更があります。保存せずに移動しますか？`)
     ) {
-      return
+      return false
     }
     setSelectedId(manualId)
     setView(nextView)
+    return true
   }
+
+  const openManualQr = (manualId: string) => {
+    if (selectManual(manualId, 'library')) setPendingQrManualId(manualId)
+  }
+
+  useEffect(() => {
+    if (!pendingQrManualId || selectedManual.id !== pendingQrManualId || view !== 'library') return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('manual-qr-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setPendingQrManualId(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [pendingQrManualId, selectedManual.id, view])
 
   useEffect(() => {
     if (!hasAnyUnsavedChanges) return
@@ -3263,27 +3280,41 @@ function App() {
 
         <div className="manual-list">
           {filteredManuals.map((manual) => (
-            <button
+            <article
               className={`manual-item ${view !== 'home' && manual.id === selectedManual.id ? 'active' : ''}`}
               key={manual.id}
-              type="button"
-              onClick={() => selectManual(manual.id)}
             >
-              {manual.thumbnail ? (
-                <img src={manual.thumbnail} alt="" />
-              ) : (
-                <span className="manual-thumbnail-empty" aria-hidden="true">
-                  <FileVideo size={18} />
+              <button className="manual-item-main" type="button" onClick={() => selectManual(manual.id)}>
+                {manual.thumbnail ? (
+                  <img src={manual.thumbnail} alt="" />
+                ) : (
+                  <span className="manual-thumbnail-empty" aria-hidden="true">
+                    <FileVideo size={18} />
+                  </span>
+                )}
+                <span className="manual-item-copy">
+                  <strong>{manual.title}</strong>
+                  <small>
+                    {manual.department} / {statusLabels[manual.status]}
+                  </small>
+                  {dirtyManualIds.has(manual.id) && <em className="manual-unsaved">未保存</em>}
                 </span>
-              )}
-              <span>
-                <strong>{manual.title}</strong>
-                <small>
-                  {manual.department} / {statusLabels[manual.status]}
-                </small>
-                {dirtyManualIds.has(manual.id) && <em className="manual-unsaved">未保存</em>}
-              </span>
-            </button>
+              </button>
+              <div className="manual-item-actions" aria-label={`${manual.title}の操作`}>
+                <button type="button" onClick={() => selectManual(manual.id, 'edit')}>
+                  <Pencil size={13} aria-hidden="true" />
+                  編集
+                </button>
+                <button type="button" onClick={() => selectManual(manual.id, (manual.decisionNodes?.length ?? 0) > 0 ? 'decision' : 'library')}>
+                  <Eye size={13} aria-hidden="true" />
+                  閲覧
+                </button>
+                <button type="button" onClick={() => openManualQr(manual.id)}>
+                  <QrCode size={13} aria-hidden="true" />
+                  QR発行
+                </button>
+              </div>
+            </article>
           ))}
         </div>
       </aside>

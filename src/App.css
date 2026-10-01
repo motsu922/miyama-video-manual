@@ -16,7 +16,7 @@
 }
 
 .brand,
-.manual-item,
+.manual-item-main,
 .topbar,
 .view-tabs,
 .upload-row,
@@ -175,8 +175,8 @@ button:disabled {
 }
 
 .manual-item {
-  gap: 10px;
-  text-align: left;
+  display: grid;
+  gap: 8px;
   background: transparent;
   color: #f8fafc;
   border-radius: 8px;
@@ -186,6 +186,16 @@ button:disabled {
 .manual-item.active,
 .manual-item:hover {
   background: #243146;
+}
+
+.manual-item-main {
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
 }
 
 .manual-item img {
@@ -207,7 +217,7 @@ button:disabled {
   background: #1c2638;
 }
 
-.manual-item span {
+.manual-item-copy {
   min-width: 0;
 }
 
@@ -215,6 +225,37 @@ button:disabled {
   display: block;
   font-size: 14px;
   line-height: 1.35;
+}
+
+.manual-item-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding-top: 7px;
+  border-top: 1px solid #334155;
+}
+
+.manual-item-actions button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid #3d4c62;
+  border-radius: 6px;
+  background: #172235;
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.manual-item-actions button:hover {
+  border-color: #60a5fa;
+  background: #1e3a5f;
+  color: #fff;
 }
 
 .workspace {
