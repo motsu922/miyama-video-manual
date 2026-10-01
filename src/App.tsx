@@ -836,6 +836,37 @@ function App() {
     () => new Map(viewerTranslation?.steps.map((step) => [step.id, step])),
     [viewerTranslation?.steps],
   )
+  const viewerDecisionNodes = useMemo<DecisionNode[]>(() => {
+    if (!viewerTranslation?.decisionNodes?.length) return decisionNodes
+
+    const translatedNodes = new Map(viewerTranslation.decisionNodes.map((node) => [node.id, node]))
+    return decisionNodes.map((node) => {
+      const translatedNode = translatedNodes.get(node.id)
+      if (!translatedNode) return node
+
+      const translatedBranches = new Map(translatedNode.branches.map((branch) => [branch.id, branch.label]))
+      return {
+        ...node,
+        title: translatedNode.title || node.title,
+        detail: translatedNode.detail || node.detail,
+        branches: node.branches?.map((branch) => ({
+          ...branch,
+          label: translatedBranches.get(branch.id) || branch.label,
+        })),
+      }
+    })
+  }, [decisionNodes, viewerTranslation?.decisionNodes])
+  const viewerDecisionNodeMap = useMemo(
+    () => new Map(viewerDecisionNodes.map((node) => [node.id, node])),
+    [viewerDecisionNodes],
+  )
+  const viewerDecisionFlowChart = useMemo(
+    () => buildDecisionFlowChart(viewerDecisionNodes, decisionStartNodeId),
+    [viewerDecisionNodes, decisionStartNodeId],
+  )
+  const activeViewerDecisionNode = activeDecisionNode
+    ? viewerDecisionNodeMap.get(activeDecisionNode.id) ?? activeDecisionNode
+    : undefined
 
   useEffect(() => {
     if (editorClip && videoRef.current) {
@@ -3073,14 +3104,16 @@ function App() {
     }
   }
 
-  const renderDecisionFlowChart = (readOnly = false) => (
+  const renderDecisionFlowChart = (readOnly = false) => {
+    const flowChart = readOnly ? viewerDecisionFlowChart : decisionFlowChart
+    return (
     <svg
       aria-label="判断と作業のフローチャート"
-      height={decisionFlowChart.height}
+      height={flowChart.height}
       ref={flowchartSvgRef}
       role="img"
-      viewBox={`0 0 ${decisionFlowChart.width} ${decisionFlowChart.height}`}
-      width={decisionFlowChart.width}
+      viewBox={`0 0 ${flowChart.width} ${flowChart.height}`}
+      width={flowChart.width}
       onClick={() => {
         setFlowContextMenu(null)
         setFlowEdgeMenu(null)
@@ -3106,11 +3139,11 @@ function App() {
           <path d="M 0 0 L 8 4 L 0 8 z" fill="#b91c1c" />
         </marker>
       </defs>
-      {decisionFlowChart.edges.map((edge) => {
+      {flowChart.edges.map((edge) => {
         const { startX, startY, turnX, endX, endY } = getDecisionFlowEdgeGeometry(
           edge,
-          decisionFlowChart.nodeWidth,
-          decisionFlowChart.nodeHeight,
+          flowChart.nodeWidth,
+          flowChart.nodeHeight,
         )
         const markerId = edge.label === 'YES'
           ? 'decision-flow-arrow-yes'
@@ -3129,7 +3162,7 @@ function App() {
           </g>
         )
       })}
-      {decisionFlowChart.nodes.map((layoutNode) => {
+      {flowChart.nodes.map((layoutNode) => {
         const isSelected = layoutNode.node.id === (readOnly ? activeDecisionNode?.id : editingDecisionNode?.id)
         const isStart = layoutNode.node.id === decisionStartNodeId
         const isConnecting = layoutNode.node.id === connectingFromNodeId
@@ -3159,8 +3192,8 @@ function App() {
         )
       })}
       <g className="decision-flow-label-layer">
-        {decisionFlowChart.edges.filter((edge) => edge.label.trim()).map((edge) => {
-          const { key, lines, base, box } = getDecisionFlowLabelLayout(edge, decisionFlowChart.nodeWidth, decisionFlowChart.nodeHeight)
+        {flowChart.edges.filter((edge) => edge.label.trim()).map((edge) => {
+          const { key, lines, base, box } = getDecisionFlowLabelLayout(edge, flowChart.nodeWidth, flowChart.nodeHeight)
           return (
             <DecisionFlowLabel
               key={`${selectedManual.id}:${edge.from.node.id}:${key}`}
@@ -3184,7 +3217,8 @@ function App() {
         })}
       </g>
     </svg>
-  )
+    )
+  }
 
 
   return (
@@ -5407,6 +5441,20 @@ function App() {
 
         {view === 'decision' && (
           <div className="decision-review-view">
+            <div className="decision-review-toolbar">
+              <label className="language-select">
+                <Languages size={16} aria-hidden="true" />
+                <span>表示言語</span>
+                <select
+                  value={viewerLanguage}
+                  onChange={(event) => setViewerLanguage(event.target.value as ManualLanguage)}
+                >
+                  <option value="ja">日本語</option>
+                  <option value="th" disabled={!selectedManual.translations?.th}>ไทย</option>
+                  <option value="pt" disabled={!selectedManual.translations?.pt}>Português</option>
+                </select>
+              </label>
+            </div>
             <details className="decision-review-chart" open={!isQrViewer}>
               <summary>フローチャート</summary>
               <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef} aria-label="閲覧用フローチャート">
@@ -5434,14 +5482,14 @@ function App() {
                     </div>
                     <section className="decision-runner-content" aria-labelledby="decision-current-title">
                       <span className="decision-runner-section-label">作業内容</span>
-                      <span className={`decision-type large ${activeDecisionNode.type}`}>
-                        {decisionNodeTypeLabels[activeDecisionNode.type]}
+                      <span className={`decision-type large ${activeViewerDecisionNode?.type ?? activeDecisionNode.type}`}>
+                        {decisionNodeTypeLabels[activeViewerDecisionNode?.type ?? activeDecisionNode.type]}
                       </span>
-                      <h2 id="decision-current-title">{activeDecisionNode.title || '名称未設定'}</h2>
+                      <h2 id="decision-current-title">{activeViewerDecisionNode?.title || '名称未設定'}</h2>
                     </section>
                     <section className="decision-runner-instruction">
                       <span className="decision-runner-section-label">作業指示</span>
-                      <p>{activeDecisionNode.detail || '現場への指示を入力してください。'}</p>
+                      <p>{activeViewerDecisionNode?.detail || '現場への指示を入力してください。'}</p>
                     </section>
                     <div className="decision-runner-media-stage">
                       <span className="decision-runner-section-label">写真・動画</span>
@@ -5486,7 +5534,7 @@ function App() {
                       </span>
                       {activeDecisionNode.type === 'question' && (
                         <div className="decision-answer-actions">
-                          {getDecisionBranches(activeDecisionNode).map((branch) => (
+                          {getDecisionBranches(activeViewerDecisionNode ?? activeDecisionNode).map((branch) => (
                             <button
                               className={`decision-answer ${branch.label.toLowerCase()}`}
                               key={branch.id}

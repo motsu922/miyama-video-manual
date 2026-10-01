@@ -3509,6 +3509,18 @@ textarea {
   gap: 18px;
 }
 
+.decision-review-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  min-height: 34px;
+}
+
+.decision-review-toolbar .language-select > span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .qr-viewer-shell .decision-review-view {
   min-height: calc(100vh - 36px);
   grid-template-columns: minmax(0, 760px);

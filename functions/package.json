@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {
+    "@google-cloud/translate": "^10.1.1",
     "firebase-functions": "^6.6.0"
   }
 }
+

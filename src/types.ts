@@ -132,6 +132,15 @@ export type ManualTranslation = {
     title: string
     detail: string
   }>
+  decisionNodes?: Array<{
+    id: string
+    title: string
+    detail: string
+    branches: Array<{
+      id: string
+      label: string
+    }>
+  }>
   translatedAt: string
 }
 

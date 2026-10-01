@@ -7,7 +7,15 @@ type TranslationTarget = ManualTranslation['language']
 
 type TranslationRequest = {
   targetLanguage: TranslationTarget
-  manual: Pick<Manual, 'title' | 'workName' | 'productName' | 'department' | 'tags' | 'steps'>
+  manual: Pick<Manual, 'title' | 'workName' | 'productName' | 'department' | 'tags'> & {
+    steps: Array<Pick<Manual['steps'][number], 'id' | 'time' | 'title' | 'detail'>>
+    decisionNodes: Array<{
+      id: string
+      title: string
+      detail: string
+      branches: Array<{ id: string; label: string }>
+    }>
+  }
 }
 
 export async function translateManualContent(
@@ -35,8 +43,18 @@ export async function translateManualContent(
         title: step.title,
         detail: step.detail,
       })),
+      decisionNodes: (manual.decisionNodes ?? []).map((node) => ({
+        id: node.id,
+        title: node.title,
+        detail: node.detail,
+        branches: (node.branches ?? []).map((branch) => ({
+          id: branch.id,
+          label: branch.label,
+        })),
+      })),
     },
   })
 
   return response.data
 }
+
