@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions'
 import { ensureSignedIn } from './manualRepository'
 import { functions, isFirebaseConfigured } from './firebase'
+import { getDecisionBranches } from './decisionBranches'
 import type { Manual, ManualTranslation } from './types'
 
 type TranslationTarget = ManualTranslation['language']
@@ -47,7 +48,7 @@ export async function translateManualContent(
         id: node.id,
         title: node.title,
         detail: node.detail,
-        branches: (node.branches ?? []).map((branch) => ({
+        branches: getDecisionBranches(node).map((branch) => ({
           id: branch.id,
           label: branch.label,
         })),

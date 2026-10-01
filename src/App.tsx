@@ -849,7 +849,7 @@ function App() {
         ...node,
         title: translatedNode.title || node.title,
         detail: translatedNode.detail || node.detail,
-        branches: node.branches?.map((branch) => ({
+        branches: getDecisionBranches(node).map((branch) => ({
           ...branch,
           label: translatedBranches.get(branch.id) || branch.label,
         })),
