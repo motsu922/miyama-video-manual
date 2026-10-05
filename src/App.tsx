@@ -642,6 +642,7 @@ function App() {
   const [reviewerName, setReviewerName] = useState('')
   const [viewerName, setViewerName] = useState('')
   const [viewerLanguage, setViewerLanguage] = useState<ManualLanguage>('ja')
+  const [isViewerFlowchartOpen, setIsViewerFlowchartOpen] = useState(true)
   const [translatingLanguage, setTranslatingLanguage] = useState<Exclude<ManualLanguage, 'ja'> | null>(null)
   const [flashCard, setFlashCard] = useState<FlashTestCard | null>(null)
   const [flashQueue, setFlashQueue] = useState<FlashTestCard[]>([])
@@ -884,6 +885,10 @@ function App() {
   const activeViewerDecisionNode = activeDecisionNode
     ? viewerDecisionNodeMap.get(activeDecisionNode.id) ?? activeDecisionNode
     : undefined
+
+  useEffect(() => {
+    setIsViewerFlowchartOpen(!isQrViewer)
+  }, [isQrViewer, selectedManual.id])
 
   useEffect(() => {
     if (editorClip && videoRef.current) {
@@ -3453,6 +3458,17 @@ function App() {
               </div>
             </div>
             <div className="viewer-language-actions">
+              {view === 'decision' && (
+                <button
+                  className="flowchart-visibility-toggle"
+                  type="button"
+                  aria-expanded={isViewerFlowchartOpen}
+                  onClick={() => setIsViewerFlowchartOpen((current) => !current)}
+                >
+                  <GitBranch size={16} aria-hidden="true" />
+                  {isViewerFlowchartOpen ? 'フローを閉じる' : 'フローを表示'}
+                </button>
+              )}
               <label className="language-select">
                 <Languages size={16} aria-hidden="true" />
                 <span>表示言語</span>
@@ -5483,13 +5499,15 @@ function App() {
         )}
 
         {view === 'decision' && (
-          <div className="decision-review-view">
-            <details className="decision-review-chart" open={!isQrViewer}>
-              <summary>フローチャート</summary>
-              <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef} aria-label="閲覧用フローチャート">
-                {renderDecisionFlowChart(true)}
-              </div>
-            </details>
+          <div className={`decision-review-view ${isViewerFlowchartOpen ? '' : 'flowchart-hidden'}`}>
+            {isViewerFlowchartOpen && (
+              <details className="decision-review-chart" open>
+                <summary>フローチャート</summary>
+                <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef} aria-label="閲覧用フローチャート">
+                  {renderDecisionFlowChart(true)}
+                </div>
+              </details>
+            )}
 
             <section className="decision-runner" aria-live="polite">
               {activeDecisionNode ? (

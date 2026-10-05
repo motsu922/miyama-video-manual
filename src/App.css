@@ -4164,9 +4164,34 @@ textarea {
   flex: 0 0 auto;
 }
 
+.flowchart-visibility-toggle {
+  min-height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.flowchart-visibility-toggle:hover {
+  border-color: #60a5fa;
+  background: #dbeafe;
+}
+
 .viewer-language-actions .language-select > span {
   font-size: 12px;
   font-weight: 800;
+}
+
+.decision-review-view.flowchart-hidden {
+  grid-template-columns: minmax(0, 760px);
+  justify-content: center;
 }
 
 .viewer-panel {
@@ -5086,6 +5111,11 @@ textarea {
     gap: 14px;
   }
 
+  .manual-viewer-shell .decision-review-view.flowchart-hidden {
+    grid-template-columns: minmax(0, 760px);
+    justify-content: center;
+  }
+
   .manual-viewer-shell .library-view > .viewer-panel {
     position: sticky;
     top: 82px;
@@ -5156,6 +5186,13 @@ textarea {
   .viewer-language-actions .language-select {
     min-height: 34px;
     padding: 0 6px;
+  }
+
+  .flowchart-visibility-toggle {
+    width: 34px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
   }
 
   .home-topbar {
