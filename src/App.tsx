@@ -9,6 +9,7 @@ import {
   Copy,
   Eye,
   FileVideo,
+  FileSpreadsheet,
   Folder,
   GitBranch,
   Home,
@@ -45,6 +46,8 @@ import {
   useMemo,
   useRef,
   useState,
+  lazy,
+  Suspense,
 } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import './App.css'
@@ -70,6 +73,8 @@ import {
 } from './manualRepository'
 import { translateManualContent } from './translationRepository'
 import type { ApprovalEvent, ApprovalStatus, DecisionNode, DecisionNodeType, FlashTestResult, InspectionImage, InspectionImageKind, Manual, ManualImage, ManualLanguage, ReviewCheck, Step, VideoClip } from './types'
+
+const ExcelManualImportDialog = lazy(() => import('./ExcelManualImportDialog'))
 
 const emptyManual: Manual = {
   id: '',
@@ -625,6 +630,7 @@ async function composeAnnotatedImage(pending: PendingInspectionImage) {
 }
 
 function App() {
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false)
   const [manuals, setManuals] = useState(initialManuals)
   const [selectedId, setSelectedId] = useState('')
   const [view, setView] = useState<'home' | 'guide' | 'edit' | 'approval' | 'library' | 'flash' | 'decision'>(() =>
@@ -3070,6 +3076,20 @@ function App() {
     setView('edit')
   }
 
+  const openExcelImport = () => {
+    if (hasUnsavedChanges && !window.confirm('編集中の手順書に未保存の変更があります。先に保存せず、インポートを開きますか？')) return
+    setIsExcelImportOpen(true)
+  }
+
+  const finishExcelImport = (manual: Manual) => {
+    pendingManualIdsRef.current.add(manual.id)
+    setManuals((current) => [manual, ...current.filter((item) => item.id !== manual.id)])
+    setSelectedId(manual.id)
+    setView('edit')
+    setIsExcelImportOpen(false)
+    setFirebaseMessage('Excel手順書を新しい下書きとして保存しました。内容を確認してから公開してください。')
+  }
+
   const duplicateManual = async () => {
     const id = `M-${Math.floor(1000 + Math.random() * 8999)}`
     const copiedManual: Manual = {
@@ -3274,6 +3294,10 @@ function App() {
           新規手順書
         </button>
 
+        <button className="sidebar-home-action" type="button" onClick={openExcelImport}>
+          <FileSpreadsheet size={18} aria-hidden="true" />Excelから取り込む
+        </button>
+
         <label className="search-box">
           <Search size={17} aria-hidden="true" />
           <input
@@ -3333,6 +3357,9 @@ function App() {
               <p>作業を選んで閲覧するか、手順書の作成・改訂を開始します。</p>
             </div>
             <div className="home-topbar-actions">
+              <button className="home-guide-button" type="button" onClick={openExcelImport}>
+                <FileSpreadsheet size={18} aria-hidden="true" />Excelから取り込む
+              </button>
               <button className="home-guide-button" type="button" onClick={() => setView('guide')}>
                 <BookOpen size={18} aria-hidden="true" />
                 運用マニュアル
@@ -4143,6 +4170,11 @@ function App() {
               <div className="section-heading">
                 <h2>基本情報</h2>
               </div>
+              {selectedManual.sourceDocument && <p className="import-source-link">
+                <a href={selectedManual.sourceDocument.url} target="_blank" rel="noreferrer">
+                  <FileSpreadsheet size={16} aria-hidden="true" />元のExcel：{selectedManual.sourceDocument.name}
+                </a>
+              </p>}
               <div className="field-row three-fields">
                 <label>
                   作業名
@@ -5955,6 +5987,9 @@ function App() {
           </section>
         </div>
       )}
+      {isExcelImportOpen && <Suspense fallback={<div role="status">インポート画面を準備中…</div>}>
+        <ExcelManualImportDialog onClose={() => setIsExcelImportOpen(false)} onImported={finishExcelImport} />
+      </Suspense>}
     </main>
   )
 }

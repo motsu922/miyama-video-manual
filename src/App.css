@@ -5525,4 +5525,7 @@ textarea {
     width: 100%;
   }
 }
+.import-source-link { overflow-wrap: anywhere; font-size: 14px; }
+.import-source-link a { display: inline-flex; align-items: center; gap: 6px; }
+.import-source-link svg { flex: none; }
 

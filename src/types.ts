@@ -145,6 +145,7 @@ export type ManualTranslation = {
 }
 
 export type Manual = {
+  sourceDocument?: { name: string; url: string }
   id: string
   title: string
   workName?: string
