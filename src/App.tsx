@@ -3239,7 +3239,7 @@ function App() {
 
 
   return (
-    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' || view === 'guide' ? 'home-shell' : ''}`}>
+    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' || view === 'guide' ? 'home-shell' : ''} ${view === 'library' || view === 'decision' ? 'manual-viewer-shell' : ''}`}>
       <aside className="sidebar" aria-label="動画マニュアル一覧">
         <div className="brand">
           <img src={miyamaLogo} alt="MIYAMA" />
@@ -3435,6 +3435,40 @@ function App() {
                 フロー閲覧
               </button>
             </nav>
+          </header>
+        )}
+
+        {(view === 'library' || view === 'decision') && (
+          <header className="viewer-language-header">
+            <div className="viewer-language-title">
+              {!isQrViewer && (
+                <button type="button" onClick={() => setView('home')}>
+                  <ArrowLeft size={16} aria-hidden="true" />
+                  一覧
+                </button>
+              )}
+              <div>
+                <span>閲覧中</span>
+                <strong>{viewerTranslation?.title ?? selectedManual.title}</strong>
+              </div>
+            </div>
+            <div className="viewer-language-actions">
+              <label className="language-select">
+                <Languages size={16} aria-hidden="true" />
+                <span>表示言語</span>
+                <select
+                  value={viewerLanguage}
+                  onChange={(event) => setViewerLanguage(event.target.value as ManualLanguage)}
+                >
+                  <option value="ja">日本語</option>
+                  <option value="th" disabled={!selectedManual.translations?.th}>ไทย</option>
+                  <option value="pt" disabled={!selectedManual.translations?.pt}>Português</option>
+                </select>
+              </label>
+              <span className={`status-badge ${selectedManual.status}`}>
+                {statusLabels[selectedManual.status]}
+              </span>
+            </div>
           </header>
         )}
 
@@ -5192,28 +5226,6 @@ function App() {
         {view === 'library' && (
           <div className="library-view">
             <section className="viewer-panel">
-              <div className="viewer-header">
-                <div>
-                  <p className="eyebrow">公開ビュー</p>
-                  <h2>{viewerTranslation?.title ?? selectedManual.title}</h2>
-                </div>
-                <div className="viewer-header-actions">
-                  <label className="language-select">
-                    <Languages size={16} aria-hidden="true" />
-                    <select
-                      value={viewerLanguage}
-                      onChange={(event) => setViewerLanguage(event.target.value as ManualLanguage)}
-                    >
-                      <option value="ja">日本語</option>
-                      <option value="th" disabled={!selectedManual.translations?.th}>ไทย</option>
-                      <option value="pt" disabled={!selectedManual.translations?.pt}>Português</option>
-                    </select>
-                  </label>
-                  <span className={`status-badge ${selectedManual.status}`}>
-                    {statusLabels[selectedManual.status]}
-                  </span>
-                </div>
-              </div>
               <div className="viewer-body">
                 {viewerClip ? (
                   <div className="viewer-video-stage video-effect-stage">
@@ -5472,20 +5484,6 @@ function App() {
 
         {view === 'decision' && (
           <div className="decision-review-view">
-            <div className="decision-review-toolbar">
-              <label className="language-select">
-                <Languages size={16} aria-hidden="true" />
-                <span>表示言語</span>
-                <select
-                  value={viewerLanguage}
-                  onChange={(event) => setViewerLanguage(event.target.value as ManualLanguage)}
-                >
-                  <option value="ja">日本語</option>
-                  <option value="th" disabled={!selectedManual.translations?.th}>ไทย</option>
-                  <option value="pt" disabled={!selectedManual.translations?.pt}>Português</option>
-                </select>
-              </label>
-            </div>
             <details className="decision-review-chart" open={!isQrViewer}>
               <summary>フローチャート</summary>
               <div className={`decision-flowchart-scroll ${isFlowPanning ? 'panning' : ''}`} ref={flowchartScrollRef} aria-label="閲覧用フローチャート">

@@ -3550,18 +3550,6 @@ textarea {
   gap: 18px;
 }
 
-.decision-review-toolbar {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: flex-end;
-  min-height: 34px;
-}
-
-.decision-review-toolbar .language-select > span {
-  font-size: 13px;
-  font-weight: 700;
-}
-
 .qr-viewer-shell .decision-review-view {
   min-height: calc(100vh - 36px);
   grid-template-columns: minmax(0, 760px);
@@ -4109,6 +4097,76 @@ textarea {
   color: #334155;
   font-weight: 700;
   font-size: 13px;
+}
+
+.viewer-language-header {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  min-height: 58px;
+  margin-bottom: 16px;
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #d7e0eb;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.viewer-language-title,
+.viewer-language-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.viewer-language-title > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.viewer-language-title > div > span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.viewer-language-title strong {
+  overflow: hidden;
+  color: #17202f;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-language-title > button {
+  min-height: 34px;
+  flex: 0 0 auto;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.viewer-language-actions {
+  flex: 0 0 auto;
+}
+
+.viewer-language-actions .language-select > span {
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .viewer-panel {
@@ -5001,6 +5059,64 @@ textarea {
   }
 }
 
+@media (min-width: 721px) and (max-width: 1280px) and (orientation: landscape) {
+  .manual-viewer-shell {
+    display: block;
+  }
+
+  .manual-viewer-shell .sidebar,
+  .manual-viewer-shell .topbar {
+    display: none;
+  }
+
+  .manual-viewer-shell .workspace,
+  .manual-viewer-shell.qr-viewer-shell .workspace {
+    width: 100%;
+    max-width: none;
+    padding: 12px 16px 18px;
+  }
+
+  .manual-viewer-shell .viewer-language-header {
+    margin-bottom: 12px;
+  }
+
+  .manual-viewer-shell .library-view,
+  .manual-viewer-shell .decision-review-view {
+    grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+    gap: 14px;
+  }
+
+  .manual-viewer-shell .library-view > .viewer-panel {
+    position: sticky;
+    top: 82px;
+    max-height: calc(100vh - 96px);
+    overflow: auto;
+  }
+
+  .manual-viewer-shell .library-step-panel {
+    min-height: calc(100vh - 96px);
+    max-height: calc(100vh - 96px);
+  }
+
+  .manual-viewer-shell .viewer-steps {
+    max-height: none;
+  }
+
+  .manual-viewer-shell .decision-review-chart {
+    position: sticky;
+    top: 76px;
+    max-height: calc(100vh - 90px);
+  }
+
+  .manual-viewer-shell .decision-review-chart .decision-flowchart-scroll {
+    max-height: calc(100vh - 145px);
+  }
+
+  .manual-viewer-shell .decision-runner {
+    min-height: calc(100vh - 96px);
+  }
+}
+
 @media (max-width: 720px) {
   .workspace,
   .sidebar {
@@ -5009,6 +5125,37 @@ textarea {
 
   .qr-viewer-shell .workspace {
     padding: 12px;
+  }
+
+  .viewer-language-header {
+    min-height: 52px;
+    margin: -4px -4px 12px;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .viewer-language-title {
+    gap: 7px;
+  }
+
+  .viewer-language-title > button {
+    min-height: 32px;
+    padding: 0 7px;
+  }
+
+  .viewer-language-title > div > span,
+  .viewer-language-actions .language-select > span,
+  .viewer-language-actions > .status-badge {
+    display: none;
+  }
+
+  .viewer-language-title strong {
+    font-size: 13px;
+  }
+
+  .viewer-language-actions .language-select {
+    min-height: 34px;
+    padding: 0 6px;
   }
 
   .home-topbar {
