@@ -3265,10 +3265,10 @@ function App() {
 
   return (
     <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' || view === 'guide' ? 'home-shell' : ''} ${view === 'library' || view === 'decision' ? 'manual-viewer-shell' : ''}`}>
-      <aside className="sidebar" aria-label="動画マニュアル一覧">
+      <aside className="sidebar" aria-label="WEBマニュアル一覧">
         <div className="brand">
           <img src={miyamaLogo} alt="MIYAMA" />
-          <span>動画マニュアル</span>
+          <span>ミヤマ工業　WEBマニュアル</span>
         </div>
 
         <button
@@ -3352,7 +3352,7 @@ function App() {
         {view === 'home' ? (
           <header className="home-topbar">
             <div>
-              <p className="eyebrow">ミヤマ工業動画マニュアル</p>
+              <p className="eyebrow">ミヤマ工業　WEBマニュアル</p>
               <h1>手順書ホーム</h1>
               <p>作業を選んで閲覧するか、手順書の作成・改訂を開始します。</p>
             </div>
@@ -4445,7 +4445,7 @@ function App() {
                 <section className="decision-flowchart" id="decision-flowchart-print" aria-label="手順フロー図">
                   <div className="flowchart-print-header" aria-hidden="true">
                     <div>
-                      <p>ミヤマ工業動画マニュアル</p>
+                      <p>ミヤマ工業　WEBマニュアル</p>
                       <h1>{selectedManual.title || '名称未設定の手順書'}</h1>
                     </div>
                     {selectedManual.thumbnail && (
