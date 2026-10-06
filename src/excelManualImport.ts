@@ -2,15 +2,15 @@ import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
 import type { Manual } from './types'
 import { getFlowCardLayout } from './decisionFlowCards'
+import { readManualSheet } from './excelManualLayout'
 
-export type ImportedStep = { id: string; sheet: string; row: number; title: string; detail: string }
+export type ImportedStep = { id: string; sheet: string; row: number; endRow?: number; title: string; detail: string }
 export type ImportedPhoto = { id: string; sheet: string; name: string; file: File; stepId: string }
 export type ExcelManualDraft = {
   title: string; department: string; owner: string; controlNo: string; productName: string
   sheets: string[]; steps: ImportedStep[]; photos: ImportedPhoto[]; warnings: string[]
 }
 
-const clean = (value: string) => value.split(/\r?\n/).map((line) => line.trim()).join('\n').trim()
 const descendants = (element: Document | Element, name: string) => Array.from(element.getElementsByTagNameNS('*', name))
 const relationId = (element: Element, name = 'id') => element.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', name) || ''
 function resolvePath(base: string, target: string) {
@@ -67,49 +67,22 @@ export async function readExcelManual(file: File): Promise<ExcelManualDraft> {
   const bookXml = await xml('xl/workbook.xml')
   const bookRels = await relationships('xl/workbook.xml')
   let hasShapes = false
+  let section = ''
   for (const sheet of workbook.worksheets) {
     if (sheet.state !== 'visible') { result.warnings.push(`「${sheet.name}」は非表示シートのため対象外です。`); continue }
     if (sheet.rowCount > 5000 || sheet.columnCount > 200) throw new Error('シートの行数・列数が多すぎます。帳票の範囲を絞ってください。')
-    const rows: { row: number; cells: { col: number; text: string }[] }[] = []
-    sheet.eachRow((row, rowNumber) => {
-      const cells: { col: number; text: string }[] = []
-      row.eachCell((cell, col) => {
-        if (cell.isMerged && cell.master.address !== cell.address) return
-        if (cell.text.trim()) cells.push({ col, text: clean(cell.text) })
-      })
-      if (cells.length) rows.push({ row: rowNumber, cells })
-    })
-    const titleHeaders = /^(作業内容|手順内容|作業手順|手順|作業項目)$/
-    const header = rows.find((row) => row.cells.some((cell) => titleHeaders.test(cell.text)))
-    if (!header) { result.warnings.push(`「${sheet.name}」は「作業内容／手順」見出しを検出できないため対象外です。`); continue }
-    const titleCol = header.cells.find((cell) => titleHeaders.test(cell.text))!.col
-    const detailCol = header.cells.find((cell) => /^(確認ポイント|注意事項|ポイント|詳細|作業指示|判定基準)$/.test(cell.text))?.col
-    const metadata = (labels: RegExp) => {
-      for (const row of rows.filter((item) => item.row < header.row)) {
-        const index = row.cells.findIndex((cell) => labels.test(cell.text))
-        if (index < 0) continue
-        const label = row.cells[index]
-        const master = sheet.getCell(row.row, label.col)
-        // Form headers either have the value below, or in the next merged cell to the right.
-        const below = sheet.getCell(row.row + 1, label.col)
-        if ((!below.isMerged || below.master.address !== master.address) && below.text.trim()) return clean(below.text)
-        return row.cells[index + 1]?.text || ''
-      }
-      return ''
-    }
+    const layout = readManualSheet(sheet, section)
+    if (!layout) { result.warnings.push(`「${sheet.name}」は「作業／作業内容／手順」見出しを検出できないため対象外です。`); continue }
+    const { steps, metadata } = layout
+    section = layout.section
     if (!result.sheets.length) {
-      result.title = metadata(/^(作業名|手順書名|タイトル)$/) || result.title
-      result.department = metadata(/^(適応部署|適用部署|部署|担当部署)$/)
-      result.owner = metadata(/^(作成|作成者)$/)
-      result.controlNo = metadata(/^(整理No[.．]?|整理番号|管理番号)$/i)
-      result.productName = metadata(/^(品名|製品名)$/)
+      result.title = metadata.title || result.title
+      result.department = metadata.department
+      result.owner = metadata.owner
+      result.controlNo = metadata.controlNo
+      result.productName = metadata.productName
     }
-    const steps = rows.filter((row) => row.row > header.row).flatMap((row) => {
-      const title = row.cells.find((cell) => cell.col === titleCol)?.text
-      if (!title || titleHeaders.test(title)) return []
-      return [{ id: `${sheet.id}:${row.row}`, sheet: sheet.name, row: row.row, title,
-        detail: row.cells.find((cell) => cell.col === detailCol)?.text || '' }]
-    })
+    if (layout.skipped) result.warnings.push(`「${sheet.name}」：番号のみの空欄を${layout.skipped}件除外しました。`)
     if (!steps.length) { result.warnings.push(`「${sheet.name}」には手順がありません。`); continue }
     result.sheets.push(sheet.name)
     result.steps.push(...steps)
@@ -128,7 +101,7 @@ export async function readExcelManual(file: File): Promise<ExcelManualDraft> {
       for (const anchor of Array.from(drawing.documentElement.children)) {
         const from = Array.from(anchor.children).find((child) => child.localName === 'from')
         const row = Number(from && descendants(from, 'row')[0]?.textContent) + 1
-        const step = from ? steps.findLast((item) => item.row <= row) : undefined
+        const step = from ? steps.find((item) => item.row <= row && row <= item.endRow) : undefined
         const shapes = descendants(anchor, 'sp')
         if (shapes.length || descendants(anchor, 'cxnSp').length) hasShapes = true
         if (step) {
@@ -155,7 +128,7 @@ export async function readExcelManual(file: File): Promise<ExcelManualDraft> {
       }
     }
   }
-  if (!result.steps.length) throw new Error('手順を検出できませんでした。「作業内容」または「手順」の列見出しがある帳票に対応しています。')
+  if (!result.steps.length) throw new Error('手順を検出できませんでした。「作業」「作業内容」「手順」の列見出しがある帳票に対応しています。')
   if (result.steps.length > 300 || result.photos.length > 300) throw new Error('手順・写真はそれぞれ300件以内に分割してください。')
   result.warnings.push('写真は元画像を取り込みます。Excel上のトリミング・回転は反映されません。写真の割り当ては配置から推定しているため、元Excelと照合してください。')
   if (hasShapes) result.warnings.unshift('Excelの矢印・囲み・図形の配置は再現されません。図形内の文字は「図中の注記」に残します。元Excelと照合し、必要な図形を追加してください。')
