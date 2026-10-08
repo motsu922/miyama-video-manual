@@ -56,6 +56,7 @@ import { firebaseProjectId, isFirebaseConfigured } from './firebase'
 import DecisionBranchFields from './DecisionBranchFields'
 import DecisionFlowLabel from './DecisionFlowLabel'
 import DecisionFlowCardContent from './DecisionFlowCardContent'
+import { getJapaneseOriginal, joinViewerText } from './viewerBilingual'
 import { expandFlowCardPositions, getFlowCardLayout, getFlowCardPort } from './decisionFlowCards'
 import { getFlowLabelBox, getFlowLabelKey, getFlowLabelSize, splitDecisionFlowEdgeLabel } from './decisionFlowLabels'
 import { applyDecisionBranchDrafts, getDecisionBranches, type DecisionBranchDraft } from './decisionBranches'
@@ -271,6 +272,7 @@ type DecisionFlowEdge = {
 }
 
 type DecisionSelection = {
+  nodeId?: string
   branchId: string
   label: string
 }
@@ -695,6 +697,7 @@ function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const viewerVideoRef = useRef<HTMLVideoElement | null>(null)
   const viewerStepsRef = useRef<HTMLDivElement | null>(null)
+  const viewerLanguageHeaderRef = useRef<HTMLElement | null>(null)
   const resumeEditorClipRef = useRef(false)
   const resumeViewerClipRef = useRef(false)
   const pendingEditorSeekRef = useRef<number | null>(null)
@@ -804,6 +807,15 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasAnyUnsavedChanges])
   const isQrViewer = Boolean(qrManualId && hasOpenedQrManual)
+  useEffect(() => {
+    const header = viewerLanguageHeaderRef.current
+    if (!header) return
+    const updateHeight = () => header.parentElement?.style.setProperty('--viewer-header-height', `${header.getBoundingClientRect().height}px`)
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(header)
+    updateHeight()
+    return () => observer.disconnect()
+  }, [view])
   const isPublished = selectedManual.status === 'published'
   const isEditingLocked = selectedManual.status !== 'draft'
   const decisionNodes = useMemo<DecisionNode[]>(
@@ -885,12 +897,29 @@ function App() {
     [viewerDecisionNodes],
   )
   const viewerDecisionFlowChart = useMemo(
-    () => buildDecisionFlowChart(viewerDecisionNodes, decisionStartNodeId),
-    [viewerDecisionNodes, decisionStartNodeId],
+    () => buildDecisionFlowChart(viewerDecisionNodes.map((node) => {
+      const original = decisionNodes.find((item) => item.id === node.id)
+      return { ...node, title: joinViewerText(node.title, original?.title),
+        branches: getDecisionBranches(node).map((branch) => ({ ...branch,
+          label: joinViewerText(branch.label, original && getDecisionBranches(original).find((item) => item.id === branch.id)?.label),
+        })),
+      }
+    }), decisionStartNodeId),
+    [viewerDecisionNodes, decisionNodes, decisionStartNodeId],
   )
   const activeViewerDecisionNode = activeDecisionNode
     ? viewerDecisionNodeMap.get(activeDecisionNode.id) ?? activeDecisionNode
     : undefined
+
+  const renderViewerText = (translated: string | undefined, original: string | undefined) => {
+    const japanese = viewerLanguage === 'ja' ? '' : getJapaneseOriginal(translated, original)
+    return <>{translated || original}{japanese && <small className="viewer-japanese" lang="ja">{japanese}</small>}</>
+  }
+  const renderSelectionLabel = (selection: DecisionSelection) => {
+    const original = decisionNodes.filter((node) => node.type === 'question' && (!selection.nodeId || node.id === selection.nodeId)).flatMap(getDecisionBranches).find((branch) => branch.id === selection.branchId)?.label
+    const translated = viewerDecisionNodes.filter((node) => node.type === 'question' && (!selection.nodeId || node.id === selection.nodeId)).flatMap(getDecisionBranches).find((branch) => branch.id === selection.branchId)?.label
+    return renderViewerText(translated || selection.label, original)
+  }
 
   useEffect(() => {
     setIsViewerFlowchartOpen(!isQrViewer)
@@ -3229,18 +3258,26 @@ function App() {
             }}
             onPointerDown={readOnly ? undefined : (event) => startFlowNodeDrag(layoutNode.node.id, event)}
           >
-            <DecisionFlowCardContent node={layoutNode.node} x={layoutNode.x} y={layoutNode.y} />
+            <DecisionFlowCardContent node={layoutNode.node} x={layoutNode.x} y={layoutNode.y}
+              originalLineStart={readOnly && getJapaneseOriginal(viewerDecisionNodeMap.get(layoutNode.node.id)?.title, decisionNodes.find((node) => node.id === layoutNode.node.id)?.title)
+                ? getFlowCardLayout(viewerDecisionNodeMap.get(layoutNode.node.id)!.title, layoutNode.node.type).lines.length : undefined} />
           </g>
         )
       })}
       <g className="decision-flow-label-layer">
         {flowChart.edges.filter((edge) => edge.label.trim()).map((edge) => {
           const { key, lines, base, box } = getDecisionFlowLabelLayout(edge, flowChart.nodeWidth, flowChart.nodeHeight)
+          const originalLabel = readOnly ? (edge.connectionKind === 'branch'
+            ? getDecisionBranches(decisionNodes.find((node) => node.id === edge.from.node.id)!).find((branch) => branch.id === edge.branchId)?.label
+            : decisionNodes.filter((node) => node.type === 'question').flatMap(getDecisionBranches).find((branch) => branch.id === edge.branchId)?.label) : undefined
+          const originalLineStart = originalLabel && edge.label.endsWith(`\n${originalLabel.trim()}`)
+            ? splitDecisionFlowEdgeLabel(edge.label.slice(0, -(originalLabel.trim().length + 1)), edge.sourceIndex, edge.sourceCount).length : undefined
           return (
             <DecisionFlowLabel
               key={`${selectedManual.id}:${edge.from.node.id}:${key}`}
               label={edge.label}
               lines={lines}
+              originalLineStart={originalLineStart}
               box={box}
               disabled={readOnly || isEditingLocked}
               onDragStart={() => { setFlowContextMenu(null); setFlowEdgeMenu(null) }}
@@ -3471,7 +3508,7 @@ function App() {
         )}
 
         {(view === 'library' || view === 'decision') && (
-          <header className="viewer-language-header">
+          <header className="viewer-language-header" ref={viewerLanguageHeaderRef}>
             <div className="viewer-language-title">
               {!isQrViewer && (
                 <button type="button" onClick={() => setView('home')}>
@@ -3481,7 +3518,7 @@ function App() {
               )}
               <div>
                 <span>閲覧中</span>
-                <strong>{viewerTranslation?.title ?? selectedManual.title}</strong>
+                <strong>{renderViewerText(viewerTranslation?.title, selectedManual.title)}</strong>
               </div>
             </div>
             <div className="viewer-language-actions">
@@ -3500,6 +3537,7 @@ function App() {
                 <Languages size={16} aria-hidden="true" />
                 <span>表示言語</span>
                 <select
+                  aria-label="表示言語"
                   value={viewerLanguage}
                   onChange={(event) => setViewerLanguage(event.target.value as ManualLanguage)}
                 >
@@ -5321,16 +5359,16 @@ function App() {
                 )}
                 <div>
                   <p>
-                    {viewerTranslation?.workName ?? selectedManual.workName ?? selectedManual.title} / 整理No:{' '}
-                    {selectedManual.controlNo ?? '未設定'} / 品名:{' '}
-                    {viewerTranslation?.productName ?? selectedManual.productName ?? '未設定'}
+                    {renderViewerText(viewerTranslation && `${viewerTranslation.workName || selectedManual.workName || selectedManual.title} / 整理No: ${selectedManual.controlNo || '未設定'} / 品名: ${viewerTranslation.productName || selectedManual.productName || '未設定'}`,
+                      `${selectedManual.workName || selectedManual.title} / 整理No: ${selectedManual.controlNo || '未設定'} / 品名: ${selectedManual.productName || '未設定'}`)}
                   </p>
                   <p>
-                    {viewerTranslation?.department ?? selectedManual.department} / {selectedManual.owner} / {selectedManual.version}
+                    {renderViewerText(viewerTranslation && `${viewerTranslation.department || selectedManual.department} / ${selectedManual.owner} / ${selectedManual.version}`,
+                      `${selectedManual.department} / ${selectedManual.owner} / ${selectedManual.version}`)}
                   </p>
                   <div className="tag-row">
-                    {(viewerTranslation?.tags ?? selectedManual.tags).map((tag) => (
-                      <span key={tag}>{tag}</span>
+                    {(viewerTranslation?.tags ?? selectedManual.tags).map((tag, index) => (
+                      <span key={tag}>{renderViewerText(tag, selectedManual.tags[index])}</span>
                     ))}
                   </div>
                   <button
@@ -5403,9 +5441,9 @@ function App() {
                         <button type="button" onClick={() => seekViewerStep(step)}>
                           <span>{String(index + 1).padStart(2, '0')}</span>
                           <span>{step.time}</span>
-                          <strong>{translatedSteps.get(step.id)?.title ?? step.title}</strong>
+                          <strong>{renderViewerText(translatedSteps.get(step.id)?.title, step.title)}</strong>
                         </button>
-                        <p>{translatedSteps.get(step.id)?.detail ?? step.detail}</p>
+                        <p>{renderViewerText(translatedSteps.get(step.id)?.detail, step.detail)}</p>
                         <div className="inspection-gallery viewer-gallery">
                           {(step.inspectionImages ?? []).map((image) => (
                             <article className={`inspection-image ${image.kind}`} key={image.id}>
@@ -5448,9 +5486,9 @@ function App() {
                     <button type="button" onClick={() => seekViewerStep(step)}>
                       <span>{String(index + 1).padStart(2, '0')}</span>
                       <span>{step.time}</span>
-                      <strong>{translatedSteps.get(step.id)?.title ?? step.title}</strong>
+                      <strong>{renderViewerText(translatedSteps.get(step.id)?.title, step.title)}</strong>
                     </button>
-                    <p>{translatedSteps.get(step.id)?.detail ?? step.detail}</p>
+                    <p>{renderViewerText(translatedSteps.get(step.id)?.detail, step.detail)}</p>
                     <div className="inspection-gallery viewer-gallery">
                       {(step.inspectionImages ?? []).map((image) => (
                         <article className={`inspection-image ${image.kind}`} key={image.id}>
@@ -5564,11 +5602,11 @@ function App() {
                       <span className={`decision-type large ${activeViewerDecisionNode?.type ?? activeDecisionNode.type}`}>
                         {decisionNodeTypeLabels[activeViewerDecisionNode?.type ?? activeDecisionNode.type]}
                       </span>
-                      <h2 id="decision-current-title">{activeViewerDecisionNode?.title || '名称未設定'}</h2>
+                      <h2 id="decision-current-title">{renderViewerText(activeViewerDecisionNode?.title, activeDecisionNode.title || '名称未設定')}</h2>
                     </section>
                     <section className="decision-runner-instruction">
                       <span className="decision-runner-section-label">作業指示</span>
-                      <p>{activeViewerDecisionNode?.detail || '現場への指示を入力してください。'}</p>
+                      <p>{activeViewerDecisionNode?.detail || activeDecisionNode.detail ? renderViewerText(activeViewerDecisionNode?.detail, activeDecisionNode.detail) : '現場への指示を入力してください。'}</p>
                     </section>
                     <div className="decision-runner-media-stage">
                       <span className="decision-runner-section-label">写真・動画</span>
@@ -5604,7 +5642,7 @@ function App() {
                     {decisionSelections.length > 0 && (
                       <div className="decision-route-context">
                         <span>引継ぎ中の選択</span>
-                        <strong>{decisionSelections.map((selection) => selection.label).join(' / ')}</strong>
+                        <strong>{decisionSelections.map((selection, index) => <span className="viewer-route-selection" key={`${selection.branchId}:${index}`}>{renderSelectionLabel(selection)}</span>)}</strong>
                       </div>
                     )}
                     <section className="decision-runner-next">
@@ -5618,9 +5656,9 @@ function App() {
                               className={`decision-answer ${branch.label.toLowerCase()}`}
                               key={branch.id}
                               type="button"
-                              onClick={() => advanceDecision(branch.nextNodeId, { branchId: branch.id, label: branch.label || '選択肢' })}
+                              onClick={() => advanceDecision(branch.nextNodeId, { nodeId: activeDecisionNode.id, branchId: branch.id, label: branch.label || '選択肢' })}
                             >
-                              {branch.label || '選択してください'}
+                              {renderViewerText(branch.label, getDecisionBranches(activeDecisionNode).find((item) => item.id === branch.id)?.label || '選択してください')}
                             </button>
                           ))}
                         </div>
@@ -5632,7 +5670,7 @@ function App() {
                             <>
                               {actionNext.matchedSelection && (
                                 <small className="decision-conditional-note">
-                                  「{actionNext.matchedSelection.label}」の選択に応じた次の作業へ進みます
+                                  {renderSelectionLabel(actionNext.matchedSelection)}の選択に応じた次の作業へ進みます
                                 </small>
                               )}
                               <button className="decision-next-action" type="button" onClick={() => advanceDecision(actionNext.nextNodeId)}>

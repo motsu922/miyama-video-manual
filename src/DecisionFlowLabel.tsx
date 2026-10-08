@@ -4,6 +4,7 @@ import { moveFlowLabel, type FlowLabelPoint } from './decisionFlowLabels'
 type Props = {
   label: string
   lines: string[]
+  originalLineStart?: number
   box: FlowLabelPoint & { width: number; height: number }
   disabled: boolean
   onDragStart: () => void
@@ -11,7 +12,7 @@ type Props = {
   onOpen: (event: Pick<MouseEvent<SVGGElement>, 'clientX' | 'clientY' | 'stopPropagation'>) => void
 }
 
-export default function DecisionFlowLabel({ label, lines, box, disabled, onDragStart, onMove, onOpen }: Props) {
+export default function DecisionFlowLabel({ label, lines, originalLineStart, box, disabled, onDragStart, onMove, onOpen }: Props) {
   const [preview, setPreview] = useState<FlowLabelPoint | null>(null)
   const dragRef = useRef<{
     pointerId: number
@@ -104,7 +105,7 @@ export default function DecisionFlowLabel({ label, lines, box, disabled, onDragS
       <title>{label}</title>
       <rect height={box.height} rx="4" width={box.width} />
       <text x="8" y="15">
-        {lines.map((line, index) => <tspan key={index} x="8" dy={index === 0 ? 0 : 18}>{line}</tspan>)}
+        {lines.map((line, index) => <tspan className={originalLineStart !== undefined && index >= originalLineStart ? 'viewer-japanese-svg' : undefined} lang={originalLineStart !== undefined && index >= originalLineStart ? 'ja' : undefined} key={index} x="8" dy={index === 0 ? 0 : 18}>{line}</tspan>)}
       </text>
     </g>
   )

@@ -5118,14 +5118,14 @@ textarea {
 
   .manual-viewer-shell .library-view > .viewer-panel {
     position: sticky;
-    top: 82px;
-    max-height: calc(100vh - 96px);
+    top: calc(var(--viewer-header-height, 58px) + 12px);
+    max-height: calc(100vh - var(--viewer-header-height, 58px) - 26px);
     overflow: auto;
   }
 
   .manual-viewer-shell .library-step-panel {
-    min-height: calc(100vh - 96px);
-    max-height: calc(100vh - 96px);
+    min-height: calc(100vh - var(--viewer-header-height, 58px) - 26px);
+    max-height: calc(100vh - var(--viewer-header-height, 58px) - 26px);
   }
 
   .manual-viewer-shell .viewer-steps {
@@ -5134,16 +5134,16 @@ textarea {
 
   .manual-viewer-shell .decision-review-chart {
     position: sticky;
-    top: 76px;
-    max-height: calc(100vh - 90px);
+    top: calc(var(--viewer-header-height, 58px) + 12px);
+    max-height: calc(100vh - var(--viewer-header-height, 58px) - 26px);
   }
 
   .manual-viewer-shell .decision-review-chart .decision-flowchart-scroll {
-    max-height: calc(100vh - 145px);
+    max-height: calc(100vh - var(--viewer-header-height, 58px) - 81px);
   }
 
   .manual-viewer-shell .decision-runner {
-    min-height: calc(100vh - 96px);
+    min-height: calc(100vh - var(--viewer-header-height, 58px) - 26px);
   }
 }
 
@@ -5528,4 +5528,24 @@ textarea {
 .import-source-link { overflow-wrap: anywhere; font-size: 14px; }
 .import-source-link a { display: inline-flex; align-items: center; gap: 6px; }
 .import-source-link svg { flex: none; }
+.manual-viewer-shell .viewer-japanese {
+  display: block;
+  margin-top: 4px;
+  color: #526273;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.manual-viewer-shell .viewer-language-title strong,
+.manual-viewer-shell .viewer-steps > section > button strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.manual-viewer-shell .decision-answer { display: flex; flex-direction: column; align-items: center; }
+.manual-viewer-shell .decision-answer .viewer-japanese { color: #fff; }
+.manual-viewer-shell .tag-row > span { display: block; }
+.manual-viewer-shell .viewer-route-selection { display: block; margin-bottom: 6px; }
+.manual-viewer-shell .viewer-japanese-svg { font-size: 10px; font-weight: 400; fill: #526273; }
 

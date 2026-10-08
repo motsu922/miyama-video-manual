@@ -7,10 +7,11 @@ export function getFlowLabelKey(connectionKind: string, branchId?: string) {
 export function splitDecisionFlowEdgeLabel(label: string, sourceIndex = 0, sourceCount = 1) {
   const normalized = label.trim()
   if (!normalized) return []
-  const characters = Array.from(sourceCount > 2 ? `${sourceIndex + 1}. ${normalized}` : normalized)
   const lines: string[] = []
-  for (let index = 0; index < characters.length; index += 16) {
-    lines.push(characters.slice(index, index + 16).join(''))
+  for (const paragraph of (sourceCount > 2 ? `${sourceIndex + 1}. ${normalized}` : normalized).split(/\r?\n/)) {
+    const characters = Array.from(paragraph)
+    if (!characters.length) lines.push('')
+    for (let index = 0; index < characters.length; index += 16) lines.push(characters.slice(index, index + 16).join(''))
   }
   return lines
 }

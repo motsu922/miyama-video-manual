@@ -2,7 +2,7 @@ import { Paperclip } from 'lucide-react'
 import type { DecisionNode } from './types'
 import { getFlowCardCornerRadius, getFlowCardLayout, getFlowCardTextLayout } from './decisionFlowCards'
 
-export default function DecisionFlowCardContent({ node, x, y }: { node: DecisionNode; x: number; y: number }) {
+export default function DecisionFlowCardContent({ node, x, y, originalLineStart }: { node: DecisionNode; x: number; y: number; originalLineStart?: number }) {
   const layout = getFlowCardLayout(node.title, node.type)
   const { lines, width, height } = layout
   const text = getFlowCardTextLayout(layout, node.type)
@@ -18,7 +18,7 @@ export default function DecisionFlowCardContent({ node, x, y }: { node: Decision
     <text className="decision-flow-kind" x={x + text.kindX} y={y + text.kindY} textAnchor={text.anchor} dominantBaseline={text.baseline}>
       {node.type === 'question' ? '判断' : node.type === 'action' ? '作業' : '完了'}
     </text>
-    {lines.map((line, index) => <text className="decision-flow-title" key={index} x={x + text.titleX} y={y + text.titleY + index * 18} textAnchor={text.anchor} dominantBaseline={text.baseline}>{line}</text>)}
+    {lines.map((line, index) => <text className={`decision-flow-title ${originalLineStart !== undefined && index >= originalLineStart ? 'viewer-japanese-svg' : ''}`} lang={originalLineStart !== undefined && index >= originalLineStart ? 'ja' : undefined} key={index} x={x + text.titleX} y={y + text.titleY + index * 18} textAnchor={text.anchor} dominantBaseline={text.baseline}>{line}</text>)}
     {attachmentCount > 0 && <g className="decision-flow-attachment-mark">
       <title>{`資料 ${attachmentCount}件`}</title>
       <rect height={text.markHeight} rx="5" width="42" x={markX} y={markY} />
