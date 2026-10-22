@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { unlockViewer } from './viewer-login.mjs'
 import ExcelJS from 'exceljs'
 
 const require = createRequire(import.meta.url)
@@ -29,6 +30,7 @@ await page.route('**/src/manualRepository.ts', (route) => route.fulfill({ conten
 await page.route('https://example.invalid/**', (route) => route.fulfill({ status: 404, body: '' }))
 try {
   await page.goto(base, { waitUntil: 'domcontentloaded' })
+  await unlockViewer(page)
   await page.getByRole('button', { name: 'Excelから取り込む' }).first().click()
   const dialog = page.getByRole('dialog')
   await dialog.waitFor()

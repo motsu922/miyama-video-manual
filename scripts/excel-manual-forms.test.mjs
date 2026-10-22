@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { unlockViewer } from './viewer-login.mjs'
 import ExcelJS from 'exceljs'
 
 // Arguments: inspection workbook, abnormal-stop workbook, die-change workbook.
@@ -28,6 +29,7 @@ await page.route('**/src/manualRepository.ts', (route) => route.fulfill({ conten
 const compact = (value) => value.replace(/\s/g, '')
 try {
   await page.goto(process.env.TEST_BASE_URL || 'http://127.0.0.1:5176/', { waitUntil: 'domcontentloaded' })
+  await unlockViewer(page)
   for (const [index, input] of inputs.entries()) {
     const source = new ExcelJS.Workbook()
     const buffer = await fs.readFile(input)

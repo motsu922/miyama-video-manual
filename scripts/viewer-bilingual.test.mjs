@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { unlockViewer } from './viewer-login.mjs'
 import { getJapaneseOriginal, joinViewerText } from '../src/viewerBilingual.ts'
 import { splitDecisionFlowEdgeLabel } from '../src/decisionFlowLabels.ts'
 
@@ -52,6 +53,7 @@ try {
   for (const width of [1440, 1024, 390]) {
     await page.setViewportSize({ width, height: width === 1024 ? 768 : 900 })
     await page.goto(`${base}?manual=bilingual-test&view=decision`)
+    if (width === 1440) await unlockViewer(page)
     await page.locator('#decision-current-title').waitFor()
     assert.equal(await page.locator('.viewer-japanese').count(), 0)
     for (const language of ['th', 'pt']) {
