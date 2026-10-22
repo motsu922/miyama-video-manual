@@ -54,6 +54,7 @@ try {
     await page.setViewportSize({ width, height: width === 1024 ? 768 : 900 })
     await page.goto(`${base}?manual=bilingual-test&view=decision`)
     if (width === 1440) await unlockViewer(page)
+    if (width >= 1100) await page.getByRole('button', { name: '手順確認', exact: true }).click()
     await page.locator('#decision-current-title').waitFor()
     assert.equal(await page.locator('.viewer-japanese').count(), 0)
     for (const language of ['th', 'pt']) {
@@ -77,6 +78,7 @@ try {
     await page.getByLabel('表示言語', { exact: true }).selectOption('ja')
     assert.equal(await page.locator('.viewer-japanese').count(), 0)
     await page.goto(`${base}?manual=chapters-test`)
+    if (width >= 1100) await page.getByRole('button', { name: '手順確認', exact: true }).click()
     await page.getByLabel('表示言語', { exact: true }).selectOption('pt')
     assert.equal(await page.locator('.viewer-steps:visible .viewer-japanese').count(), 2)
     assert.ok(await page.locator('.viewer-steps:visible').innerText().then(text => text.includes('未翻訳の手順')))

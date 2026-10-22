@@ -56,6 +56,7 @@ import { firebaseProjectId, isFirebaseConfigured } from './firebase'
 import DecisionBranchFields from './DecisionBranchFields'
 import DecisionFlowLabel from './DecisionFlowLabel'
 import DecisionFlowCardContent from './DecisionFlowCardContent'
+import ManualDocumentView from './ManualDocumentView'
 import { getJapaneseOriginal, joinViewerText } from './viewerBilingual'
 import { expandFlowCardPositions, getFlowCardLayout, getFlowCardPort } from './decisionFlowCards'
 import { getFlowLabelBox, getFlowLabelKey, getFlowLabelSize, splitDecisionFlowEdgeLabel } from './decisionFlowLabels'
@@ -650,6 +651,15 @@ function App() {
   const [reviewerName, setReviewerName] = useState('')
   const [viewerName, setViewerName] = useState('')
   const [viewerLanguage, setViewerLanguage] = useState<ManualLanguage>('ja')
+  const [viewerLayout, setViewerLayout] = useState<'document' | 'interactive'>('document')
+  const [isDesktopViewer, setIsDesktopViewer] = useState(() => window.matchMedia('(min-width: 1100px)').matches)
+  const showDocumentViewer = isDesktopViewer && viewerLayout === 'document' && (view === 'library' || view === 'decision')
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1100px)')
+    const update = () => setIsDesktopViewer(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   const [isViewerFlowchartOpen, setIsViewerFlowchartOpen] = useState(true)
   const [translatingLanguage, setTranslatingLanguage] = useState<Exclude<ManualLanguage, 'ja'> | null>(null)
   const [flashCard, setFlashCard] = useState<FlashTestCard | null>(null)
@@ -785,7 +795,10 @@ function App() {
   }
 
   const openManualQr = (manualId: string) => {
-    if (selectManual(manualId, 'library')) setPendingQrManualId(manualId)
+    if (selectManual(manualId, 'library')) {
+      setViewerLayout('interactive')
+      setPendingQrManualId(manualId)
+    }
   }
 
   useEffect(() => {
@@ -3301,7 +3314,7 @@ function App() {
 
 
   return (
-    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' || view === 'guide' ? 'home-shell' : ''} ${view === 'library' || view === 'decision' ? 'manual-viewer-shell' : ''}`}>
+    <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' || view === 'guide' ? 'home-shell' : ''} ${view === 'library' || view === 'decision' ? 'manual-viewer-shell' : ''} ${showDocumentViewer ? 'document-viewer-shell' : ''}`}>
       <aside className="sidebar" aria-label="WEBマニュアル一覧">
         <div className="brand">
           <img src={miyamaLogo} alt="MIYAMA" />
@@ -3522,7 +3535,11 @@ function App() {
               </div>
             </div>
             <div className="viewer-language-actions">
-              {view === 'decision' && (
+              {isDesktopViewer && <div className="viewer-display-toggle" role="group" aria-label="閲覧形式">
+                <button type="button" aria-pressed={showDocumentViewer} onClick={() => setViewerLayout('document')}><FileSpreadsheet size={16} aria-hidden="true" />手順書</button>
+                <button type="button" aria-pressed={!showDocumentViewer} onClick={() => setViewerLayout('interactive')}><PlayCircle size={16} aria-hidden="true" />手順確認</button>
+              </div>}
+              {view === 'decision' && !showDocumentViewer && (
                 <button
                   className="flowchart-visibility-toggle"
                   type="button"
@@ -5309,7 +5326,20 @@ function App() {
           </div>
         )}
 
-        {view === 'library' && (
+        {showDocumentViewer && <ManualDocumentView manual={selectedManual} translation={viewerTranslation} hasVideo={Boolean(viewerClip)}
+          onImage={setFullscreenViewerImage} onPlayStep={(step) => {
+            const seconds = parseStepTime(step.time)
+            const position = getComposedPosition(seconds)
+            pendingViewerSeekRef.current = position.time
+            resumeViewerClipRef.current = true
+            setViewerClipIndex(position.index)
+            setCurrentVideoTime(seconds)
+            setViewerLayout('interactive')
+            setView('library')
+            window.scrollTo({ top: 0, behavior: 'instant' })
+          }} />}
+
+        {view === 'library' && !showDocumentViewer && (
           <div className="library-view">
             <section className="viewer-panel">
               <div className="viewer-body">
@@ -5568,7 +5598,7 @@ function App() {
           </div>
         )}
 
-        {view === 'decision' && (
+        {view === 'decision' && !showDocumentViewer && (
           <div className={`decision-review-view ${isViewerFlowchartOpen ? '' : 'flowchart-hidden'}`}>
             {isViewerFlowchartOpen && (
               <details className="decision-review-chart" open>
