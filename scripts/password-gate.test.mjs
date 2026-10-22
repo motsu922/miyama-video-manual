@@ -15,7 +15,7 @@ try {
     let appLoads = 0
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
-    await page.route('**/src/App.tsx', route => {
+    await page.route('**/src/App.tsx*', route => {
       appLoads++
       return route.fulfill({ contentType: 'text/javascript', body: "export default function App() { return 'Unlocked test application' }" })
     })
@@ -53,7 +53,7 @@ try {
   }
   const page = await browser.newPage()
   await page.addInitScript(() => Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('Storage unavailable') } }))
-  await page.route('**/src/App.tsx', route => route.fulfill({ contentType: 'text/javascript', body: "export default function App() { return 'Memory-only unlock' }" }))
+  await page.route('**/src/App.tsx*', route => route.fulfill({ contentType: 'text/javascript', body: "export default function App() { return 'Memory-only unlock' }" }))
   await page.goto(base)
   await unlockViewer(page)
   await page.getByText('Memory-only unlock', { exact: true }).waitFor()
