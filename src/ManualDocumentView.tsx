@@ -3,7 +3,8 @@ import { useMemo } from 'react'
 import { getDecisionBranches } from './decisionBranches'
 import { getManualDocumentRows } from './manualDocumentRows'
 import { getJapaneseOriginal } from './viewerBilingual'
-import type { Manual, ManualTranslation, Step } from './types'
+import type { DecisionNodeMedia, Manual, ManualTranslation, Step } from './types'
+import StepVideoPlayer from './StepVideoPlayer'
 import './ManualDocumentView.css'
 
 type Props = {
@@ -49,7 +50,7 @@ export default function ManualDocumentView({ manual, translation, hasVideo, onIm
       <tbody>{rows.map(({ key, node, step }, index) => {
         const source = node || step!
         const translated = node ? translatedNodes.get(node.id) : translatedSteps.get(step!.id)
-        const media = node ? (node.media ?? []).map(item => ({ ...item, category: '' })) : (step?.inspectionImages ?? []).map(item => ({ ...item, category: { ok: 'OK写真', ng: 'NG例', criteria: '判定基準' }[item.kind], kind: 'image' }))
+        const media: (DecisionNodeMedia & { category: string })[] = node ? (node.media ?? []).map(item => ({ ...item, category: '' })) : [...(step?.inspectionImages ?? []).map(item => ({ ...item, category: { ok: 'OK写真', ng: 'NG例', criteria: '判定基準' }[item.kind], kind: 'image' as const })), ...(step?.videos ?? []).map(item => ({ ...item, category: '' }))]
         return <tr key={key} id={`document-${key}`}>
           <th scope="row">{index + 1}</th>
           <td>
@@ -73,7 +74,7 @@ export default function ManualDocumentView({ manual, translation, hasVideo, onIm
             </div>}
           </td>
           <td><div className="manual-document-media">{media.length ? media.map(item => <figure key={item.id}>
-            {item.kind === 'video' ? <video controls playsInline preload="metadata" src={item.url} aria-label={item.name} /> : <button type="button" aria-label={`${item.name}を全画面表示`} onClick={() => onImage({ src: item.url, alt: item.name })}>
+            {item.kind === 'video' ? <StepVideoPlayer media={item} /> : <button type="button" aria-label={`${item.name}を全画面表示`} onClick={() => onImage({ src: item.url, alt: item.name })}>
               <img src={item.url} alt={item.name} loading="lazy" /><Maximize2 size={18} aria-hidden="true" />
             </button>}
             <figcaption>{item.category && <strong>{item.category} </strong>}{item.name}</figcaption>
@@ -88,4 +89,3 @@ export default function ManualDocumentView({ manual, translation, hasVideo, onIm
     </figure>)}</div></section>}
   </article>
 }
-

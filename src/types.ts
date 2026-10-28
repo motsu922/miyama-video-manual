@@ -6,6 +6,7 @@ export type Step = {
   title: string
   detail: string
   inspectionImages?: InspectionImage[]
+  videos?: DecisionNodeMedia[]
 }
 
 export type InspectionImageKind = 'ok' | 'ng' | 'criteria'
@@ -88,6 +89,7 @@ export type DecisionNodeMedia = {
   name: string
   url: string
   uploadedAt: string
+  videoEdit?: Omit<VideoClip, 'id' | 'name' | 'url'>
 }
 
 export type DecisionBranch = {
@@ -173,4 +175,3 @@ export type Manual = {
   decisionNodes?: DecisionNode[]
   decisionStartNodeId?: string
 }
-

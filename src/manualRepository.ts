@@ -10,7 +10,7 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase/storage'
 import { signInAnonymously } from 'firebase/auth'
 import { auth, db, isFirebaseConfigured, storage } from './firebase'
 import type { FlashTestResult, InspectionImageKind, Manual } from './types'
@@ -151,7 +151,7 @@ export async function ensureSignedIn() {
   return credential.user
 }
 
-export async function uploadManualVideo(manualId: string, file: File) {
+export async function uploadManualVideo(manualId: string, file: File, onProgress?: (percent: number) => void) {
   if (!isFirebaseConfigured || !storage) {
     throw new Error('Firebase Storage 設定が未投入です')
   }
@@ -160,7 +160,12 @@ export async function uploadManualVideo(manualId: string, file: File) {
 
   const safeName = file.name.replace(/[^\w.-]/g, '_')
   const videoRef = ref(storage, `manualVideos/${manualId}/${Date.now()}-${safeName}`)
-  await uploadBytes(videoRef, file, { contentType: file.type || 'video/mp4' })
+  const task = uploadBytesResumable(videoRef, file, { contentType: file.type || 'video/mp4' })
+  await new Promise<void>((resolve, reject) => task.on('state_changed',
+    snapshot => onProgress?.(Math.round(snapshot.bytesTransferred / Math.max(1, snapshot.totalBytes) * 100)),
+    reject,
+    () => resolve(),
+  ))
   return getDownloadURL(videoRef)
 }
 
@@ -198,4 +203,3 @@ export async function uploadInspectionImage(
   await uploadBytes(imageRef, file, { contentType: file.type || 'image/jpeg' })
   return getDownloadURL(imageRef)
 }
-

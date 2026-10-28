@@ -57,6 +57,10 @@ import DecisionBranchFields from './DecisionBranchFields'
 import DecisionFlowLabel from './DecisionFlowLabel'
 import DecisionFlowCardContent from './DecisionFlowCardContent'
 import ManualDocumentView from './ManualDocumentView'
+import StepVideoPlayer from './StepVideoPlayer'
+import VideoWorkflowGuide from './VideoWorkflowGuide'
+import VideoWorkflowDialog, { type VideoWorkflowRequest } from './VideoWorkflowDialog'
+import { insertVideoIntoManual, type VideoInsert } from './videoWorkflow'
 import { getJapaneseOriginal, joinViewerText } from './viewerBilingual'
 import { expandFlowCardPositions, getFlowCardLayout, getFlowCardPort } from './decisionFlowCards'
 import { getFlowLabelBox, getFlowLabelKey, getFlowLabelSize, splitDecisionFlowEdgeLabel } from './decisionFlowLabels'
@@ -696,6 +700,7 @@ function App() {
     y: number
   } | null>(null)
   const [decisionEditDraft, setDecisionEditDraft] = useState<DecisionNode | null>(null)
+  const [videoWorkflow, setVideoWorkflow] = useState<(VideoWorkflowRequest & { manualId: string }) | null>(null)
   const [decisionBranchDrafts, setDecisionBranchDrafts] = useState<DecisionBranchDraft[]>([])
   const [decisionEditorError, setDecisionEditorError] = useState('')
   const [decisionConnectionTargetId, setDecisionConnectionTargetId] = useState<string | null>(null)
@@ -772,6 +777,27 @@ function App() {
       next.delete(manualId)
       return next
     })
+  }
+
+  const openVideoWorkflow = (request: VideoWorkflowRequest = {}) => {
+    if (selectedManual.status !== 'draft' || !selectedManual.id) return
+    setVideoWorkflow({ ...request, manualId: selectedManual.id })
+  }
+
+  const insertEditedVideo = async (insert: VideoInsert) => {
+    const latest = selectedManualRef.current
+    if (!videoWorkflow || latest.id !== videoWorkflow.manualId) throw new Error('対象の手順書が変更されました。開き直してください。')
+    if (insert.target.kind === 'node') {
+      const targetId = insert.target.id
+      const node = latest.decisionNodes?.find(item => item.id === targetId)
+      const copies = latest.decisionNodes?.filter(item => item.id !== targetId && item.title.trim() && item.title.trim() === node?.title.trim()) ?? []
+      if (copies.length && window.confirm(`同じ名前のカードが${copies.length}件あります。ほかのカードにもこの動画を反映しますか？`)) insert.copyNodeIds = copies.map(item => item.id)
+    }
+    const updated = insertVideoIntoManual(latest, insert)
+    await saveManual(updated)
+    setManuals(current => current.map(item => item.id === updated.id ? updated : item))
+    markManualSaved(updated.id)
+    setFirebaseMessage('編集した動画を手順に挿入し、保存しました')
   }
 
   const selectManual = (
@@ -1821,6 +1847,7 @@ function App() {
     const updatedManual: Manual = {
       ...selectedManual,
       decisionNodes: updatedNodes,
+      steps: selectedManual.steps.map(step => step.id === targetNode?.sourceStepId ? { ...step, videos: step.videos?.filter(media => media.id !== mediaId) } : step),
       updatedAt: new Date().toISOString().slice(0, 10),
     }
     setManuals((current) => current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)))
@@ -2065,6 +2092,7 @@ function App() {
   }
 
   flowKeyboardHandlerRef.current = (event) => {
+    if (videoWorkflow) return
     if (view !== 'edit') return
     if (event.key === 'Escape' && isDecisionEditorOpen) {
       event.preventDefault()
@@ -2717,7 +2745,7 @@ function App() {
       updateManual({
         decisionNodes: decisionNodes.map((node) =>
           node.id === existingNode.id
-            ? { ...node, title: step.title || '名称未設定の作業', detail: step.detail }
+            ? { ...node, title: step.title || '名称未設定の作業', detail: step.detail, media: [...(node.media ?? []).filter(item => !step.videos?.some(video => video.id === item.id)), ...(step.videos ?? [])] }
             : node,
         ),
       })
@@ -2736,6 +2764,7 @@ function App() {
       title: step.title || '名称未設定の作業',
       detail: step.detail,
       sourceStepId: step.id,
+      media: step.videos ?? [],
       flowPosition: {
         x: 38,
         y: lowestNodeY + decisionFlowChart.nodeHeight + 38,
@@ -3315,6 +3344,7 @@ function App() {
 
   return (
     <main className={`app-shell ${isQrViewer ? 'qr-viewer-shell' : ''} ${view === 'home' || view === 'guide' ? 'home-shell' : ''} ${view === 'library' || view === 'decision' ? 'manual-viewer-shell' : ''} ${showDocumentViewer ? 'document-viewer-shell' : ''}`}>
+      {videoWorkflow && <VideoWorkflowDialog manual={selectedManual} request={videoWorkflow} onClose={() => setVideoWorkflow(null)} onInsert={insertEditedVideo} />}
       <aside className="sidebar" aria-label="WEBマニュアル一覧">
         <div className="brand">
           <img src={miyamaLogo} alt="MIYAMA" />
@@ -3701,6 +3731,7 @@ function App() {
         {view === 'guide' && (
           <div className="guide-view">
             <nav className="guide-topic-nav" aria-label="運用マニュアルの目次">
+              <a href="#guide-video-howto">動画の編集・手順への挿入</a>
               <a href="#guide-flow-howto">フローチャートの作り方</a>
               <a href="#guide-chapters-howto">チャプター手順の活用方法</a>
             </nav>
@@ -3765,7 +3796,7 @@ function App() {
                 <li>
                   <h3>カードを1回クリックして内容を編集する</h3>
                   <p>「移動」モードでカードをクリックすると編集画面が開きます。「表示内容」には短い作業名、「現場への指示」には実施方法・注意点・確認事項を入力し、「確定」を押します。未確定のテキスト変更を取り消すときは「戻す」を押します。</p>
-                  <p>写真や動画は「資料追加」から登録します。添付済みのカードには添付マークが付きます。カードのドラッグは位置の移動で、編集画面は開きません。</p>
+                  <p>写真は「資料追加」、動画は「動画を編集して追加」から登録します。添付済みのカードには添付マークが付きます。カードのドラッグは位置の移動で、編集画面は開きません。</p>
                 </li>
                 <li>
                   <h3>開始地点を決め、カードを順番につなぐ</h3>
@@ -3851,11 +3882,12 @@ function App() {
               </div>
               <aside className="guide-transfer-note" aria-label="フローへ追加するときの注意">
                 <strong>フローへ追加するときの注意</strong>
-                <p>動画の開始時刻や検査画像は、作業カードにはコピーされません。フロー閲覧でも見せたい写真・動画は、カードの「資料追加」から別途登録してください。</p>
+                <p>手順ごとに追加した動画は作業カードにもコピーされます。全体動画の開始時刻や検査画像はコピーされないため、必要な写真はカードの「資料追加」から登録してください。</p>
               </aside>
               <p className="guide-use-summary"><strong>使い分け:</strong> 作業の順番や判断による分岐はフローチャート、動作の実演や時間指定の見直しはチャプター手順。両方を作る場合は、動画で区切りを登録してから「フローへ追加」を使うと、手順名と説明の再入力を減らせます。</p>
             </section>
 
+            <VideoWorkflowGuide />
             <section className="guide-section" aria-labelledby="guide-status-title">
               <header>
                 <p className="eyebrow">公開状態</p>
@@ -3951,6 +3983,11 @@ function App() {
                 )}
                 <span>{selectedManual.duration}</span>
               </div>
+              <div className="upload-row">
+                <button type="button" className="save-button" disabled={isEditingLocked || isUploading} onClick={() => openVideoWorkflow()}><Scissors size={18} />動画を編集して手順に追加</button>
+              </div>
+              <details className="video-advanced">
+              <summary>動画全体のアップロード・連結</summary>
               <div className="upload-row">
                 <label className="upload-control">
                   <UploadCloud size={18} aria-hidden="true" />
@@ -4203,6 +4240,7 @@ function App() {
                   </div>
                 </section>
               )}
+              </details>
             </section>
 
             <section className={`form-panel ${isEditingLocked ? 'locked-panel' : ''}`}>
@@ -4394,6 +4432,7 @@ function App() {
                       />
                     </label>
                     <div className="step-flow-action" onClick={(event) => event.stopPropagation()}>
+                      <button type="button" disabled={isEditingLocked} onClick={() => openVideoWorkflow({ target: { kind: 'step', id: step.id } })}><Scissors size={17} />動画を追加</button>
                       <button
                         className={decisionNodes.some((node) => node.sourceStepId === step.id) ? 'linked' : ''}
                         disabled={isEditingLocked}
@@ -4405,6 +4444,12 @@ function App() {
                           ? 'フローを更新'
                           : 'フローへ追加'}
                       </button>
+                    </div>
+                    <div className="step-video-attachments wide-field" onClick={event => event.stopPropagation()}>
+                      {(step.videos ?? []).map(media => <section className="step-video-attachment" key={media.id}>
+                        <header><span>{media.name}</span><button type="button" title="動画を編集" aria-label={`${media.name}を編集`} onClick={() => openVideoWorkflow({ target: { kind: 'step', id: step.id }, media })}><Scissors size={17} /></button><button type="button" title="動画を手順から削除" aria-label={`${media.name}を手順から削除`} onClick={() => { if (window.confirm('この動画を手順から削除しますか？元動画は残ります。')) updateManual({ steps: selectedManual.steps.map(item => item.id === step.id ? { ...item, videos: item.videos?.filter(video => video.id !== media.id) } : item), decisionNodes: decisionNodes.map(node => node.sourceStepId === step.id ? { ...node, media: node.media?.filter(item => item.id !== media.id) } : node) }) }}><Trash2 size={17} /></button></header>
+                        <StepVideoPlayer media={media} />
+                      </section>)}
                     </div>
                     <section
                       className="inspection-panel step-inspection-panel"
@@ -4817,9 +4862,10 @@ function App() {
                                 {media.kind === 'image' ? (
                                   <img src={media.url} alt={media.name} />
                                 ) : (
-                                  <video playsInline preload="metadata" src={media.url} />
+                                  <StepVideoPlayer media={media} />
                                 )}
                                 <strong title={media.name}>{media.name}</strong>
+                                {media.kind === 'video' && <button type="button" title="動画を編集" aria-label={`${media.name}を編集`} onClick={() => openVideoWorkflow({ target: { kind: 'node', id: editingDecisionNode.id }, media })}><Scissors size={16} /></button>}
                                 <button
                                   aria-label={`${media.name}を削除`}
                                   disabled={isEditingLocked}
@@ -4835,6 +4881,7 @@ function App() {
                         </section>
                       )}
                       <div className="decision-flow-quick-actions">
+                        <button type="button" disabled={isEditingLocked || isUploading} onClick={() => openVideoWorkflow({ target: { kind: 'node', id: editingDecisionNode.id } })}><Scissors size={16} />動画を編集して追加</button>
                         <button
                           className={editingDecisionNode.id === decisionStartNodeId ? 'active' : ''}
                           disabled={isEditingLocked}
@@ -4848,7 +4895,7 @@ function App() {
                           <UploadCloud size={16} aria-hidden="true" />
                           資料追加
                           <input
-                            accept="image/*,video/*"
+                            accept="image/*"
                             disabled={isEditingLocked || isUploading}
                             multiple
                             type="file"
@@ -4998,11 +5045,12 @@ function App() {
                               <strong>参照資料</strong>
                               <small>現場で確認する画像・動画</small>
                             </div>
+                            <button type="button" disabled={isEditingLocked || isUploading} onClick={() => openVideoWorkflow({ target: { kind: 'node', id: node.id } })}><Scissors size={16} />動画を編集して追加</button>
                             <label className="decision-media-upload">
                               <UploadCloud size={16} aria-hidden="true" />
                               資料を追加
                               <input
-                                accept="image/*,video/*"
+                                accept="image/*"
                                 disabled={isEditingLocked || isUploading}
                                 multiple
                                 type="file"
@@ -5029,11 +5077,12 @@ function App() {
                                       </span>
                                     </a>
                                   ) : (
-                                    <video controls playsInline preload="metadata" src={media.url} />
+                                    <StepVideoPlayer media={media} />
                                   )}
                                   <div>
                                     <span>{media.kind === 'image' ? '画像' : '動画'}</span>
                                     <strong title={media.name}>{media.name}</strong>
+                                    {media.kind === 'video' && <button type="button" title="動画を編集" aria-label={`${media.name}を編集`} onClick={() => openVideoWorkflow({ target: { kind: 'node', id: node.id }, media })}><Scissors size={16} /></button>}
                                   </div>
                                   <button
                                     aria-label={`${media.name}を削除`}
@@ -5474,6 +5523,7 @@ function App() {
                           <strong>{renderViewerText(translatedSteps.get(step.id)?.title, step.title)}</strong>
                         </button>
                         <p>{renderViewerText(translatedSteps.get(step.id)?.detail, step.detail)}</p>
+                        <div className="step-video-attachments">{step.videos?.map(media => <StepVideoPlayer key={media.id} media={media} />)}</div>
                         <div className="inspection-gallery viewer-gallery">
                           {(step.inspectionImages ?? []).map((image) => (
                             <article className={`inspection-image ${image.kind}`} key={image.id}>
@@ -5519,6 +5569,7 @@ function App() {
                       <strong>{renderViewerText(translatedSteps.get(step.id)?.title, step.title)}</strong>
                     </button>
                     <p>{renderViewerText(translatedSteps.get(step.id)?.detail, step.detail)}</p>
+                    <div className="step-video-attachments">{step.videos?.map(media => <StepVideoPlayer key={media.id} media={media} />)}</div>
                     <div className="inspection-gallery viewer-gallery">
                       {(step.inspectionImages ?? []).map((image) => (
                         <article className={`inspection-image ${image.kind}`} key={image.id}>
@@ -5659,7 +5710,7 @@ function App() {
                               </figure>
                             ) : (
                               <figure key={media.id}>
-                                <video controls playsInline preload="metadata" src={media.url} />
+                                <StepVideoPlayer media={media} />
                                 <figcaption>{media.name}</figcaption>
                               </figure>
                             ),
@@ -6063,4 +6114,3 @@ function App() {
 }
 
 export default App
-
