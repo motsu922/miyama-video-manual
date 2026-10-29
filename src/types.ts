@@ -171,6 +171,7 @@ export type Manual = {
   videoUrl: string
   videoClips?: VideoClip[]
   videoSources?: VideoSource[]
+  removedVideoSourceUrls?: string[]
   manualImages?: ManualImage[]
   thumbnail: string
   tags: string[]

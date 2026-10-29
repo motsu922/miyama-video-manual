@@ -1,0 +1,17 @@
+.video-compression-dialog { width: min(680px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 24px); padding: 0; border: 1px solid #ccd6e0; border-radius: 8px; color: #17202f; background: white; }
+.video-compression-dialog[open] { display: flex; flex-direction: column; }
+.video-compression-dialog::backdrop { background: #10182099; }
+.video-compression-dialog header, .video-compression-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; flex-shrink: 0; }
+.video-compression-dialog header { border-bottom: 1px solid #dbe3eb; }
+.video-compression-dialog footer { border-top: 1px solid #dbe3eb; flex-wrap: wrap; }
+.video-compression-dialog h2 { font-size: 19px; margin: 0; }
+.video-compression-dialog h3 { font-size: 15px; margin: 0 0 16px; overflow-wrap: anywhere; }
+.video-compression-body { padding: 18px; overflow: auto; min-height: 0; }
+.video-compression-body p { font-size: 13px; }
+.video-compression-body dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; font-size: 14px; }
+.video-compression-body dd { margin: 0; font-weight: 700; }
+.video-compression-body video { width: 100%; display: block; max-height: 40dvh; background: #101820; }
+.video-compression-body progress { width: 100%; margin: 12px 0; }
+.video-compression-dialog button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 5px; background: white; color: #17202f; font: inherit; font-size: 13px; cursor: pointer; }
+.video-compression-dialog .primary { background: #2563eb; color: white; border-color: #2563eb; }
+.video-compression-dialog button:disabled { opacity: .5; cursor: not-allowed; }

@@ -8,6 +8,10 @@
 .video-source-header button, .video-source-actions > button { color: white; background: #2563eb; border-color: #2563eb; }
 .video-source-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 12px; max-height: 400px; overflow: auto; padding: 3px; }
 .video-source-grid .video-source-item { min-width: 0; display: flex; flex-direction: column; align-items: stretch; padding: 6px; gap: 6px; text-align: left; }
+.video-source-entry { position: relative; min-width: 0; }
+.video-source-entry .video-source-item { width: 100%; height: 100%; }
+.video-source-entry .video-source-delete { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; padding: 0; background: #fff; color: #b42323; border-color: #f1c5c5; }
+.video-source-error { color: #a32121; background: #fff3f3; padding: 10px; font-size: 13px; overflow-wrap: anywhere; }
 .video-source-item[aria-pressed='true'] { border: 2px solid #2563eb; padding: 5px; background: #eff6ff; }
 .video-source-item strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .video-source-thumb { position: relative; display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 9; background: #edf1f5; color: #526174; overflow: hidden; border-radius: 3px; }

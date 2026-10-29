@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { appendVideoSource, getVideoSources, getVideoUses, validateVideoSourceFile } from '../src/videoLibrary.ts'
+import { appendVideoSource, getVideoSources, getVideoUses, removeVideoSource, validateVideoSourceFile } from '../src/videoLibrary.ts'
 
 const source = { id: 's', name: 'Source', url: 'original', uploadedAt: '' }
 const media = { ...source, kind: 'video', videoEdit: { duration: 30, trimStart: 3, trimEnd: 10 } }
@@ -34,5 +34,21 @@ test('reediting includes independent uses and avoids duplicate linked card entri
 test('file validation rejects non-videos and oversized files', () => {
   assert.throws(() => validateVideoSourceFile({ type: 'image/png', size: 12 }))
   assert.throws(() => validateVideoSourceFile({ type: 'video/mp4', size: 500 * 1024 * 1024 + 1 }))
-  assert.doesNotThrow(() => validateVideoSourceFile({ type: 'video/mp4', size: 500 * 1024 * 1024 }))
+  assert.throws(() => validateVideoSourceFile({ type: 'video/mp4', size: 500 * 1024 * 1024 }))
+  assert.doesNotThrow(() => validateVideoSourceFile({ type: 'video/mp4', size: 500 * 1024 * 1024 - 1 }))
+})
+
+test('removing used and legacy sources persists without deleting playback or referenced files', () => {
+  const original = appendVideoSource(manual, source)
+  const removed = removeVideoSource(original, source)
+  assert.equal(removed.videoSources.length, 0)
+  assert.deepEqual(getVideoSources(removed).map(item => item.url), ['main'])
+  assert.deepEqual(getVideoSources(JSON.parse(JSON.stringify(removed))).map(item => item.url), ['main'])
+  assert.deepEqual(removed.steps, original.steps)
+  assert.deepEqual(removed.decisionNodes, original.decisionNodes)
+  assert.deepEqual(removed.videoClips, original.videoClips)
+  assert.equal(removed.videoUrl, original.videoUrl)
+  assert.deepEqual(removeVideoSource(removed, source).removedVideoSourceUrls, ['original'])
+  assert.equal(getVideoSources(appendVideoSource(removed, source)).length, 2)
+  assert.throws(() => removeVideoSource({ ...original, status: 'published' }, source))
 })

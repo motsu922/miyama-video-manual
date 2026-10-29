@@ -58,7 +58,7 @@ import AuthoringSectionTabs, { type AuthoringSection } from './AuthoringSectionT
 import StepVideoPlayer from './StepVideoPlayer'
 import VideoWorkflowGuide from './VideoWorkflowGuide'
 import VideoSourceLibrary from './VideoSourceLibrary'
-import { appendVideoSource } from './videoLibrary'
+import { appendVideoSource, removeVideoSource } from './videoLibrary'
 import VideoWorkflowDialog, { type VideoWorkflowRequest } from './VideoWorkflowDialog'
 import { insertVideoIntoManual, type VideoInsert } from './videoWorkflow'
 import { getJapaneseOriginal, joinViewerText } from './viewerBilingual'
@@ -753,6 +753,21 @@ function App() {
     }
     setManuals(current => current.map(item => item.id === manualId && item.status === 'draft' ? appendVideoSource(item, source) : item))
     setFirebaseMessage(`動画素材を登録しました: ${source.name}`)
+  }
+
+  const deleteVideoSource = async (manualId: string, source: VideoSource) => {
+    const latest = selectedManualRef.current
+    if (latest.id !== manualId) throw new Error('対象の手順書が変更されました。開き直してください。')
+    const updated = removeVideoSource(latest, source)
+    await saveManual(updated)
+    const current = selectedManualRef.current
+    if (current.id === manualId && current.status === 'draft') {
+      selectedManualRef.current = removeVideoSource(current, source)
+      if (current === latest) markManualSaved(manualId)
+      else markManualDirty(manualId)
+    }
+    setManuals(current => current.map(item => item.id === manualId && item.status === 'draft' ? removeVideoSource(item, source) : item))
+    setFirebaseMessage(`素材一覧から削除しました: ${source.name}`)
   }
 
   const insertEditedVideo = async (insert: VideoInsert) => {
@@ -4633,7 +4648,7 @@ function App() {
             </div>
             <div id="authoring-steps-panel" className="editor-grid" role="tabpanel" aria-labelledby="authoring-steps-tab" hidden={editorSection !== 'steps'}>
             <section className="video-panel">
-              <VideoSourceLibrary key={selectedManual.id} manual={selectedManual} disabled={isEditingLocked || isUploading} onRegister={registerVideoSource} onEdit={openVideoWorkflow} onBusyChange={setIsUploading} />
+              <VideoSourceLibrary key={selectedManual.id} manual={selectedManual} disabled={isEditingLocked || isUploading} onRegister={registerVideoSource} onRemove={deleteVideoSource} onEdit={openVideoWorkflow} onBusyChange={setIsUploading} />
               {editorClip && <details className="legacy-video">
                 <summary>登録済みの全体動画</summary>
               <div className="video-frame">
