@@ -46,6 +46,7 @@ export const uploadManualImage=prohibited,uploadInspectionImage=prohibited,delet
   await page.goto(base)
   await unlockViewer(page)
   await page.locator('.manual-list').getByRole('button', { name: '編集', exact: true }).click()
+  await page.getByRole('tab', { name: '手順作成', exact: true }).click()
   const open = () => page.getByRole('button', { name: '動画を編集して手順に追加', exact: true }).click()
   const dialog = page.locator('dialog.video-workflow')
   await open()

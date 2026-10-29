@@ -57,6 +57,7 @@ import DecisionBranchFields from './DecisionBranchFields'
 import DecisionFlowLabel from './DecisionFlowLabel'
 import DecisionFlowCardContent from './DecisionFlowCardContent'
 import ManualDocumentView from './ManualDocumentView'
+import AuthoringSectionTabs, { type AuthoringSection } from './AuthoringSectionTabs'
 import StepVideoPlayer from './StepVideoPlayer'
 import VideoWorkflowGuide from './VideoWorkflowGuide'
 import VideoWorkflowDialog, { type VideoWorkflowRequest } from './VideoWorkflowDialog'
@@ -637,6 +638,8 @@ async function composeAnnotatedImage(pending: PendingInspectionImage) {
 }
 
 function App() {
+  const [editorSection, setEditorSection] = useState<AuthoringSection>('flow')
+  const editorWorkspaceRef = useRef<HTMLDivElement>(null)
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false)
   const [manuals, setManuals] = useState(initialManuals)
   const [selectedId, setSelectedId] = useState('')
@@ -782,6 +785,27 @@ function App() {
   const openVideoWorkflow = (request: VideoWorkflowRequest = {}) => {
     if (selectedManual.status !== 'draft' || !selectedManual.id) return
     setVideoWorkflow({ ...request, manualId: selectedManual.id })
+  }
+
+  const changeEditorSection = (section: AuthoringSection) => {
+    if (section === editorSection) return
+    editorWorkspaceRef.current?.querySelectorAll('video').forEach(video => video.pause())
+    resumeEditorClipRef.current = false
+    setFlowContextMenu(null)
+    setFlowEdgeMenu(null)
+    setConnectingFromNodeId(null)
+    setEditorSection(section)
+  }
+
+  const showLinkedFlowCard = (nodeId: string) => {
+    changeEditorSection('flow')
+    setSelectedDecisionNodeId(nodeId)
+    window.requestAnimationFrame(() => {
+      document.getElementById('authoring-flow-panel')?.scrollIntoView({ block: 'start' })
+      const card = flowchartScrollRef.current?.querySelector<SVGElement>(`[data-node-id="${CSS.escape(nodeId)}"]`)
+      card?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      card?.focus({ preventScroll: true })
+    })
   }
 
   const insertEditedVideo = async (insert: VideoInsert) => {
@@ -1092,6 +1116,7 @@ function App() {
     setViewerClipIndex(0)
     setViewerLanguage('ja')
     const manual = selectedManualRef.current
+    setEditorSection((manual.decisionNodes?.length ?? 0) > 0 || manual.steps.length === 0 ? 'flow' : 'steps')
     const startNodeId = manual.decisionStartNodeId ?? manual.decisionNodes?.[0]?.id ?? null
     setDecisionNodeId(startNodeId)
     setDecisionPath(startNodeId ? [startNodeId] : [])
@@ -2093,7 +2118,7 @@ function App() {
 
   flowKeyboardHandlerRef.current = (event) => {
     if (videoWorkflow) return
-    if (view !== 'edit') return
+    if (view !== 'edit' || editorSection !== 'flow') return
     if (event.key === 'Escape' && isDecisionEditorOpen) {
       event.preventDefault()
       closeDecisionEditor()
@@ -2749,7 +2774,7 @@ function App() {
             : node,
         ),
       })
-      setSelectedDecisionNodeId(existingNode.id)
+      showLinkedFlowCard(existingNode.id)
       setFirebaseMessage(`「${step.title || '名称未設定の作業'}」をフローチャートへ更新しました`)
       return
     }
@@ -2774,7 +2799,7 @@ function App() {
       decisionNodes: [...decisionNodes, node],
       decisionStartNodeId: decisionStartNodeId ?? node.id,
     })
-    setSelectedDecisionNodeId(node.id)
+    showLinkedFlowCard(node.id)
     setFirebaseMessage(`「${node.title}」をフローチャートへ追加しました`)
   }
 
@@ -3285,6 +3310,7 @@ function App() {
             aria-label={`${decisionNodeTypeLabels[layoutNode.node.type]}: ${layoutNode.node.title || '名称未設定'}${attachmentCount ? `、資料${attachmentCount}件` : ''}`}
             className={`decision-flow-node ${layoutNode.node.type} ${isSelected ? 'selected' : ''} ${isStart ? 'start' : ''} ${isConnecting ? 'connecting-source' : ''}`}
             key={layoutNode.node.id}
+            data-node-id={layoutNode.node.id}
             role={readOnly ? 'img' : 'button'}
             tabIndex={readOnly ? undefined : 0}
             onClick={(event) => {
@@ -3790,7 +3816,7 @@ function App() {
               <ol className="guide-instructions">
                 <li>
                   <h3>基本情報を入力し、白紙のフローにカードを置く</h3>
-                  <p>「新規手順書」で作業名・整理No・品名・部署を登録します。「フローチャートで作成」の上部にある「作業」「判断」「完了」を押して、必要なカードを追加します。白紙部分を右クリックしてカードを置くこともできます。</p>
+                  <p>「新規手順書」で作業名・整理No・品名・部署を登録し、基本情報の下の「フローチャート作成」タブを選びます。「フローチャートで作成」の上部にある「作業」「判断」「完了」を押して、必要なカードを追加します。白紙部分を右クリックしてカードを置くこともできます。</p>
                   <p><strong>作業:</strong> 実施すること（例: 外観を確認する）。<strong>判断:</strong> 進み先を選ぶ条件（例: 判定結果は？）。<strong>完了:</strong> その経路の終わり（例: 確認完了）。</p>
                 </li>
                 <li>
@@ -3840,7 +3866,7 @@ function App() {
               <ol className="guide-instructions">
                 <li>
                   <h3>作業動画を登録して再生する</h3>
-                  <p>作成画面に動画をアップロードし、手順の区切りとなる場面まで再生します。位置を正確に決めたい場合は、その場面で一時停止します。</p>
+                  <p>基本情報の下の「手順作成」タブを選びます。「動画・写真」と「チャプター手順」が同じセクションに表示されます。動画をアップロードし、手順の区切りとなる場面まで再生します。位置を正確に決めたい場合は、その場面で一時停止します。</p>
                 </li>
                 <li>
                   <h3>区切りの場面で「現在位置に手順追加」を押す</h3>
@@ -3862,7 +3888,7 @@ function App() {
                 </li>
                 <li>
                   <h3>同じ作業をフローチャートでも使う</h3>
-                  <p>手順の「フローへ追加」を押すと、<strong>手順名と説明</strong>を持つ作業カードが図に追加されます。追加したカードは「つなぐ」で前後のカードへ接続します。</p>
+                  <p>手順の「フローへ追加」を押すと、<strong>手順名と説明</strong>を持つ作業カードが図に追加され、「フローチャート作成」へ切り替わります。追加したカードは「つなぐ」で前後のカードへ接続します。「手順作成」へ戻っても入力内容は残ります。最後に「手順書を保存」を押してください。</p>
                   <p>手順名や説明を変更した後は「フローを更新」を押して、対応するカードへ再反映します。これは自動同期ではなく、チャプター手順からカードへの一方向の更新です。カード側で編集した手順名・説明も、この操作で置き換わります。</p>
                 </li>
               </ol>
@@ -3928,321 +3954,7 @@ function App() {
         )}
 
         {view === 'edit' && (
-          <div className="editor-grid">
-            <section className="video-panel">
-              <div className="video-frame">
-                {editorClip ? (
-                  <div className="video-effect-stage">
-                    <video
-                      key={editorClip.id}
-                      controls
-                      onLoadedMetadata={handleEditorClipLoaded}
-                      onTimeUpdate={(event) =>
-                        handleClipTimeUpdate(event, editorClip, editorClipIndex, 'editor')
-                      }
-                      poster={selectedManual.thumbnail}
-                      ref={videoRef}
-                      src={editorClip.url}
-                      style={getClipVideoStyle(editorClip)}
-                    >
-                      動画を再生できません
-                    </video>
-                    {editorClip.spotlight && (
-                      <div aria-hidden="true" className="video-spotlight" style={getSpotlightStyle(editorClip)} />
-                    )}
-                    {editorClip.caption && (
-                      <div className={`video-caption ${editorClip.captionPosition ?? 'bottom'}`}>
-                        {editorClip.caption}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  selectedManual.thumbnail ? (
-                    <>
-                      <img
-                        src={selectedManual.thumbnail}
-                        alt={`${selectedManual.title}のサムネイル`}
-                      />
-                      <button type="button" className="play-button" aria-label="動画を再生">
-                        <PlayCircle size={54} aria-hidden="true" />
-                      </button>
-                    </>
-                  ) : (
-                    <div className="video-empty-state">
-                      <FileVideo size={34} aria-hidden="true" />
-                      <span>動画・写真は未登録です</span>
-                    </div>
-                  )
-                )}
-                {activeStep && (
-                  <div className="step-overlay">
-                    <small>{activeStep.time}</small>
-                    <strong>{activeStep.title}</strong>
-                    <p>{activeStep.detail}</p>
-                  </div>
-                )}
-                <span>{selectedManual.duration}</span>
-              </div>
-              <div className="upload-row">
-                <button type="button" className="save-button" disabled={isEditingLocked || isUploading} onClick={() => openVideoWorkflow()}><Scissors size={18} />動画を編集して手順に追加</button>
-              </div>
-              <details className="video-advanced">
-              <summary>動画全体のアップロード・連結</summary>
-              <div className="upload-row">
-                <label className="upload-control">
-                  <UploadCloud size={18} aria-hidden="true" />
-                  {isUploading ? 'アップロード中' : '動画アップロード'}
-                  <input
-                    accept="video/*"
-                    disabled={isUploading || isEditingLocked}
-                    onChange={handleVideoUpload}
-                    type="file"
-                  />
-                </label>
-                <label className="upload-control secondary-upload">
-                  <Plus size={18} aria-hidden="true" />
-                  動画を追加
-                  <input
-                    accept="video/*"
-                    disabled={isUploading || isEditingLocked}
-                    multiple
-                    onChange={handleClipUpload}
-                    type="file"
-                  />
-                </label>
-                <label className="upload-control secondary-upload">
-                  <UploadCloud size={18} aria-hidden="true" />
-                  写真を追加
-                  <input
-                    accept="image/*"
-                    disabled={isUploading || isEditingLocked}
-                    multiple
-                    onChange={handleManualImageUpload}
-                    type="file"
-                  />
-                </label>
-                <button
-                  disabled={!editorClip || isEditingLocked}
-                  type="button"
-                  onClick={captureCurrentFrame}
-                >
-                  <FileVideo size={18} aria-hidden="true" />
-                  現在フレームをサムネイル
-                </button>
-                <button
-                  className={hasUnsavedChanges ? 'save-button needs-save' : 'save-button'}
-                  disabled={isEditingLocked}
-                  type="button"
-                  onClick={persistSelectedManual}
-                >
-                  <Save size={18} aria-hidden="true" />
-                  Firebaseへ保存
-                </button>
-                <span className={`save-state ${hasUnsavedChanges ? 'unsaved' : 'saved'}`} aria-live="polite">
-                  {hasUnsavedChanges ? '未保存の変更あり' : '保存済み'}
-                </span>
-              </div>
-              {(selectedManual.manualImages?.length ?? 0) > 0 && (
-                <section className="manual-image-panel">
-                  <div className="section-heading compact-heading">
-                    <h2>作業写真</h2>
-                    <span>{selectedManual.manualImages?.length ?? 0} 枚</span>
-                  </div>
-                  <div className="manual-image-gallery">
-                    {(selectedManual.manualImages ?? []).map((image) => (
-                      <article key={image.id}>
-                        <img src={image.url} alt={image.name} />
-                        <strong>{image.name}</strong>
-                        <button
-                          aria-label={`${image.name}を削除`}
-                          disabled={isEditingLocked}
-                          title="写真を削除"
-                          type="button"
-                          onClick={() => void removeManualImage(image.id)}
-                        >
-                          <Trash2 size={16} aria-hidden="true" />
-                        </button>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              )}
-              {videoClips.length > 0 && (
-                <section className="clip-editor">
-                  <div className="section-heading compact-heading">
-                    <h2>動画構成</h2>
-                    <span>{videoClips.length} 本</span>
-                  </div>
-                  <div className="clip-list">
-                    {videoClips.map((clip, index) => (
-                      <article className={editorClip?.id === clip.id ? 'active-clip' : ''} key={clip.id}>
-                        <button
-                          className="clip-preview"
-                          type="button"
-                          onClick={() => setEditorClipIndex(index)}
-                        >
-                          <span>{String(index + 1).padStart(2, '0')}</span>
-                          <strong>{clip.name}</strong>
-                          <small>{formatVideoTime(Math.max(0, clip.trimEnd - clip.trimStart))}</small>
-                        </button>
-                        <div className="clip-trim-fields">
-                          <label>
-                            <Scissors size={14} aria-hidden="true" />
-                            開始（秒）
-                            <input
-                              disabled={isEditingLocked}
-                              min="0"
-                              max={Math.max(0, clip.trimEnd - 0.1)}
-                              step="0.1"
-                              type="number"
-                              value={clip.trimStart}
-                              onChange={(event) =>
-                                updateClip(clip.id, {
-                                  trimStart: Math.min(
-                                    Math.max(0, Number(event.target.value)),
-                                    Math.max(0, clip.trimEnd - 0.1),
-                                  ),
-                                })
-                              }
-                            />
-                          </label>
-                          <label>
-                            <Scissors size={14} aria-hidden="true" />
-                            終了（秒）
-                            <input
-                              disabled={isEditingLocked}
-                              min={Math.min(clip.duration || 0, clip.trimStart + 0.1)}
-                              max={clip.duration || undefined}
-                              step="0.1"
-                              type="number"
-                              value={clip.trimEnd}
-                              onChange={(event) =>
-                                updateClip(clip.id, {
-                                  trimEnd: Math.max(
-                                    clip.trimStart + 0.1,
-                                    Math.min(clip.duration || Number(event.target.value), Number(event.target.value)),
-                                  ),
-                                })
-                              }
-                            />
-                          </label>
-                        </div>
-                        <section className="clip-effect-controls" aria-label={`${clip.name} の演出設定`}>
-                          <label>
-                            拡大
-                            <select
-                              disabled={isEditingLocked}
-                              value={clip.zoom ?? 1}
-                              onChange={(event) => updateClip(clip.id, { zoom: Number(event.target.value) })}
-                            >
-                              <option value="1">なし</option>
-                              <option value="1.2">1.2倍</option>
-                              <option value="1.5">1.5倍</option>
-                              <option value="2">2倍</option>
-                            </select>
-                          </label>
-                          <label>
-                            再生速度
-                            <select
-                              disabled={isEditingLocked}
-                              value={getClipPlaybackRate(clip)}
-                              onChange={(event) => updateClip(clip.id, { playbackRate: Number(event.target.value) })}
-                            >
-                              <option value="1">標準</option>
-                              <option value="0.75">0.75倍</option>
-                              <option value="0.5">0.5倍</option>
-                            </select>
-                          </label>
-                          <label className="spotlight-toggle">
-                            <input
-                              checked={clip.spotlight ?? false}
-                              disabled={isEditingLocked}
-                              type="checkbox"
-                              onChange={(event) => updateClip(clip.id, { spotlight: event.target.checked })}
-                            />
-                            スポットで強調
-                          </label>
-                          <div className="focus-picker" aria-label="拡大とスポットの注視位置">
-                            <span>注視位置</span>
-                            <div>
-                              {clipFocusPoints.map((point) => {
-                                const focus = getClipFocus(clip)
-                                const isSelected = focus.x === point.x && focus.y === point.y
-                                return (
-                                  <button
-                                    aria-label={point.label}
-                                    className={isSelected ? 'selected-focus' : ''}
-                                    disabled={isEditingLocked}
-                                    key={point.label}
-                                    title={point.label}
-                                    type="button"
-                                    onClick={() => updateClip(clip.id, { focusX: point.x, focusY: point.y })}
-                                  />
-                                )
-                              })}
-                            </div>
-                          </div>
-                          <label className="caption-input">
-                            テロップ
-                            <input
-                              disabled={isEditingLocked}
-                              maxLength={60}
-                              placeholder="例: ボルトの締付状態を確認"
-                              value={clip.caption ?? ''}
-                              onChange={(event) => updateClip(clip.id, { caption: event.target.value })}
-                            />
-                          </label>
-                          <label>
-                            テロップ位置
-                            <select
-                              disabled={isEditingLocked}
-                              value={clip.captionPosition ?? 'bottom'}
-                              onChange={(event) =>
-                                updateClip(clip.id, {
-                                  captionPosition: event.target.value as 'top' | 'center' | 'bottom',
-                                })
-                              }
-                            >
-                              <option value="top">上</option>
-                              <option value="center">中央</option>
-                              <option value="bottom">下</option>
-                            </select>
-                          </label>
-                        </section>
-                        <div className="clip-actions">
-                          <button
-                            aria-label="動画を上へ移動"
-                            disabled={isEditingLocked || index === 0}
-                            type="button"
-                            onClick={() => moveClip(index, -1)}
-                          >
-                            <ArrowUp size={17} aria-hidden="true" />
-                          </button>
-                          <button
-                            aria-label="動画を下へ移動"
-                            disabled={isEditingLocked || index === videoClips.length - 1}
-                            type="button"
-                            onClick={() => moveClip(index, 1)}
-                          >
-                            <ArrowDown size={17} aria-hidden="true" />
-                          </button>
-                          <button
-                            aria-label="動画を構成から外す"
-                            disabled={isEditingLocked}
-                            type="button"
-                            onClick={() => removeClip(clip.id)}
-                          >
-                            <Trash2 size={17} aria-hidden="true" />
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              )}
-              </details>
-            </section>
-
+          <div className="editor-workspace" ref={editorWorkspaceRef}>
             <section className={`form-panel ${isEditingLocked ? 'locked-panel' : ''}`}>
               {isEditingLocked && (
                 <div className="locked-note">
@@ -4365,137 +4077,8 @@ function App() {
               </fieldset>
             </section>
 
-            <section className={`chapter-panel ${isEditingLocked ? 'locked-panel' : ''}`}>
-              <fieldset className="editor-fieldset" disabled={isEditingLocked}>
-              <div className="section-heading">
-                <h2>チャプター手順</h2>
-                <button disabled={isEditingLocked} type="button" onClick={addStep}>
-                  <Plus size={17} aria-hidden="true" />
-                  現在位置に手順追加
-                </button>
-              </div>
-              <div className="steps">
-                {selectedManual.steps.map((step, index) => (
-                  <article
-                    className={`step-card ${activeStep?.id === step.id ? 'active-step' : ''}`}
-                    key={step.id}
-                    onClick={() => seekToStep(step)}
-                  >
-                    <strong>{String(index + 1).padStart(2, '0')}</strong>
-                    <button
-                      aria-label={`手順 ${index + 1} を削除`}
-                      className="step-delete"
-                      disabled={isEditingLocked || selectedManual.steps.length <= 1}
-                      title="手順を削除"
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        removeStep(step.id)
-                      }}
-                    >
-                      <Trash2 size={17} aria-hidden="true" />
-                    </button>
-                    <label>
-                      時間
-                      <input
-                        value={step.time}
-                        onChange={(event) => {
-                          const steps = selectedManual.steps.map((item) =>
-                            item.id === step.id ? { ...item, time: event.target.value } : item,
-                          )
-                          updateManual({ steps })
-                        }}
-                      />
-                    </label>
-                    <label>
-                      手順名
-                      <input
-                        value={step.title}
-                        onChange={(event) => {
-                          const steps = selectedManual.steps.map((item) =>
-                            item.id === step.id ? { ...item, title: event.target.value } : item,
-                          )
-                          updateManual({ steps })
-                        }}
-                      />
-                    </label>
-                    <label className="wide-field">
-                      説明
-                      <textarea
-                        value={step.detail}
-                        onChange={(event) => {
-                          const steps = selectedManual.steps.map((item) =>
-                            item.id === step.id ? { ...item, detail: event.target.value } : item,
-                          )
-                          updateManual({ steps })
-                        }}
-                      />
-                    </label>
-                    <div className="step-flow-action" onClick={(event) => event.stopPropagation()}>
-                      <button type="button" disabled={isEditingLocked} onClick={() => openVideoWorkflow({ target: { kind: 'step', id: step.id } })}><Scissors size={17} />動画を追加</button>
-                      <button
-                        className={decisionNodes.some((node) => node.sourceStepId === step.id) ? 'linked' : ''}
-                        disabled={isEditingLocked}
-                        type="button"
-                        onClick={() => addStepToDecisionFlow(step)}
-                      >
-                        <GitBranch size={17} aria-hidden="true" />
-                        {decisionNodes.some((node) => node.sourceStepId === step.id)
-                          ? 'フローを更新'
-                          : 'フローへ追加'}
-                      </button>
-                    </div>
-                    <div className="step-video-attachments wide-field" onClick={event => event.stopPropagation()}>
-                      {(step.videos ?? []).map(media => <section className="step-video-attachment" key={media.id}>
-                        <header><span>{media.name}</span><button type="button" title="動画を編集" aria-label={`${media.name}を編集`} onClick={() => openVideoWorkflow({ target: { kind: 'step', id: step.id }, media })}><Scissors size={17} /></button><button type="button" title="動画を手順から削除" aria-label={`${media.name}を手順から削除`} onClick={() => { if (window.confirm('この動画を手順から削除しますか？元動画は残ります。')) updateManual({ steps: selectedManual.steps.map(item => item.id === step.id ? { ...item, videos: item.videos?.filter(video => video.id !== media.id) } : item), decisionNodes: decisionNodes.map(node => node.sourceStepId === step.id ? { ...node, media: node.media?.filter(item => item.id !== media.id) } : node) }) }}><Trash2 size={17} /></button></header>
-                        <StepVideoPlayer media={media} />
-                      </section>)}
-                    </div>
-                    <section
-                      className="inspection-panel step-inspection-panel"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="section-heading compact-heading">
-                        <h2>この手順の検査画像</h2>
-                      </div>
-                      <div className="inspection-upload-grid">
-                        {(['ok', 'ng', 'criteria'] as InspectionImageKind[]).map((kind) => (
-                          <label className={`inspection-upload ${kind}`} key={kind}>
-                            <UploadCloud size={18} aria-hidden="true" />
-                            {imageKindLabels[kind]}を追加
-                            <input
-                              accept="image/*"
-                              onChange={handleInspectionImageUpload(kind, step.id)}
-                              type="file"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                      <div className="inspection-gallery">
-                        {(step.inspectionImages ?? []).map((image) => (
-                          <article className={`inspection-image ${image.kind}`} key={image.id}>
-                            <img src={image.url} alt={image.name} />
-                            <span>{imageKindLabels[image.kind]}</span>
-                            <strong>{image.name}</strong>
-                            <button
-                              aria-label={`${image.name}を削除`}
-                              className="inspection-image-delete"
-                              disabled={isEditingLocked}
-                              title="検査画像を削除"
-                              type="button"
-                              onClick={() => void removeInspectionImage(step.id, image.id)}
-                            >
-                              <Trash2 size={15} aria-hidden="true" />
-                            </button>
-                          </article>
-                        ))}
-                      </div>
-                    </section>
-                  </article>
-                ))}
-              </div>
-              </fieldset>
-            </section>
+            <AuthoringSectionTabs value={editorSection} onChange={changeEditorSection} nodeCount={decisionNodes.length} stepCount={selectedManual.steps.length} />
+            <div id="authoring-flow-panel" role="tabpanel" aria-labelledby="authoring-flow-tab" hidden={editorSection !== 'flow'}>
             <section className={`decision-authoring ${isEditingLocked ? 'locked-panel' : ''}`}>
                 <header className="decision-section-header">
                   <div>
@@ -5247,6 +4830,455 @@ function App() {
                   </div>
                 </details>
               </section>
+            </div>
+            <div id="authoring-steps-panel" className="editor-grid" role="tabpanel" aria-labelledby="authoring-steps-tab" hidden={editorSection !== 'steps'}>
+            <section className="video-panel" aria-labelledby="step-media-title">
+              <div className="section-heading"><h2 id="step-media-title">動画・写真</h2></div>
+              <div className="video-frame">
+                {editorClip ? (
+                  <div className="video-effect-stage">
+                    <video
+                      key={editorClip.id}
+                      controls
+                      onLoadedMetadata={handleEditorClipLoaded}
+                      onTimeUpdate={(event) =>
+                        handleClipTimeUpdate(event, editorClip, editorClipIndex, 'editor')
+                      }
+                      poster={selectedManual.thumbnail}
+                      ref={videoRef}
+                      src={editorClip.url}
+                      style={getClipVideoStyle(editorClip)}
+                    >
+                      動画を再生できません
+                    </video>
+                    {editorClip.spotlight && (
+                      <div aria-hidden="true" className="video-spotlight" style={getSpotlightStyle(editorClip)} />
+                    )}
+                    {editorClip.caption && (
+                      <div className={`video-caption ${editorClip.captionPosition ?? 'bottom'}`}>
+                        {editorClip.caption}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  selectedManual.thumbnail ? (
+                    <>
+                      <img
+                        src={selectedManual.thumbnail}
+                        alt={`${selectedManual.title}のサムネイル`}
+                      />
+                      <button type="button" className="play-button" aria-label="動画を再生">
+                        <PlayCircle size={54} aria-hidden="true" />
+                      </button>
+                    </>
+                  ) : (
+                    <div className="video-empty-state">
+                      <FileVideo size={34} aria-hidden="true" />
+                      <span>動画・写真は未登録です</span>
+                    </div>
+                  )
+                )}
+                {activeStep && (
+                  <div className="step-overlay">
+                    <small>{activeStep.time}</small>
+                    <strong>{activeStep.title}</strong>
+                    <p>{activeStep.detail}</p>
+                  </div>
+                )}
+                <span>{selectedManual.duration}</span>
+              </div>
+              <div className="upload-row">
+                <button type="button" className="save-button" disabled={isEditingLocked || isUploading} onClick={() => openVideoWorkflow()}><Scissors size={18} />動画を編集して手順に追加</button>
+              </div>
+              <details className="video-advanced">
+              <summary>動画全体のアップロード・連結</summary>
+              <div className="upload-row">
+                <label className="upload-control">
+                  <UploadCloud size={18} aria-hidden="true" />
+                  {isUploading ? 'アップロード中' : '動画アップロード'}
+                  <input
+                    accept="video/*"
+                    disabled={isUploading || isEditingLocked}
+                    onChange={handleVideoUpload}
+                    type="file"
+                  />
+                </label>
+                <label className="upload-control secondary-upload">
+                  <Plus size={18} aria-hidden="true" />
+                  動画を追加
+                  <input
+                    accept="video/*"
+                    disabled={isUploading || isEditingLocked}
+                    multiple
+                    onChange={handleClipUpload}
+                    type="file"
+                  />
+                </label>
+                <label className="upload-control secondary-upload">
+                  <UploadCloud size={18} aria-hidden="true" />
+                  写真を追加
+                  <input
+                    accept="image/*"
+                    disabled={isUploading || isEditingLocked}
+                    multiple
+                    onChange={handleManualImageUpload}
+                    type="file"
+                  />
+                </label>
+                <button
+                  disabled={!editorClip || isEditingLocked}
+                  type="button"
+                  onClick={captureCurrentFrame}
+                >
+                  <FileVideo size={18} aria-hidden="true" />
+                  現在フレームをサムネイル
+                </button>
+                <button
+                  className={hasUnsavedChanges ? 'save-button needs-save' : 'save-button'}
+                  disabled={isEditingLocked}
+                  type="button"
+                  onClick={persistSelectedManual}
+                >
+                  <Save size={18} aria-hidden="true" />
+                  Firebaseへ保存
+                </button>
+                <span className={`save-state ${hasUnsavedChanges ? 'unsaved' : 'saved'}`} aria-live="polite">
+                  {hasUnsavedChanges ? '未保存の変更あり' : '保存済み'}
+                </span>
+              </div>
+              {(selectedManual.manualImages?.length ?? 0) > 0 && (
+                <section className="manual-image-panel">
+                  <div className="section-heading compact-heading">
+                    <h2>作業写真</h2>
+                    <span>{selectedManual.manualImages?.length ?? 0} 枚</span>
+                  </div>
+                  <div className="manual-image-gallery">
+                    {(selectedManual.manualImages ?? []).map((image) => (
+                      <article key={image.id}>
+                        <img src={image.url} alt={image.name} />
+                        <strong>{image.name}</strong>
+                        <button
+                          aria-label={`${image.name}を削除`}
+                          disabled={isEditingLocked}
+                          title="写真を削除"
+                          type="button"
+                          onClick={() => void removeManualImage(image.id)}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+              {videoClips.length > 0 && (
+                <section className="clip-editor">
+                  <div className="section-heading compact-heading">
+                    <h2>動画構成</h2>
+                    <span>{videoClips.length} 本</span>
+                  </div>
+                  <div className="clip-list">
+                    {videoClips.map((clip, index) => (
+                      <article className={editorClip?.id === clip.id ? 'active-clip' : ''} key={clip.id}>
+                        <button
+                          className="clip-preview"
+                          type="button"
+                          onClick={() => setEditorClipIndex(index)}
+                        >
+                          <span>{String(index + 1).padStart(2, '0')}</span>
+                          <strong>{clip.name}</strong>
+                          <small>{formatVideoTime(Math.max(0, clip.trimEnd - clip.trimStart))}</small>
+                        </button>
+                        <div className="clip-trim-fields">
+                          <label>
+                            <Scissors size={14} aria-hidden="true" />
+                            開始（秒）
+                            <input
+                              disabled={isEditingLocked}
+                              min="0"
+                              max={Math.max(0, clip.trimEnd - 0.1)}
+                              step="0.1"
+                              type="number"
+                              value={clip.trimStart}
+                              onChange={(event) =>
+                                updateClip(clip.id, {
+                                  trimStart: Math.min(
+                                    Math.max(0, Number(event.target.value)),
+                                    Math.max(0, clip.trimEnd - 0.1),
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            <Scissors size={14} aria-hidden="true" />
+                            終了（秒）
+                            <input
+                              disabled={isEditingLocked}
+                              min={Math.min(clip.duration || 0, clip.trimStart + 0.1)}
+                              max={clip.duration || undefined}
+                              step="0.1"
+                              type="number"
+                              value={clip.trimEnd}
+                              onChange={(event) =>
+                                updateClip(clip.id, {
+                                  trimEnd: Math.max(
+                                    clip.trimStart + 0.1,
+                                    Math.min(clip.duration || Number(event.target.value), Number(event.target.value)),
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <section className="clip-effect-controls" aria-label={`${clip.name} の演出設定`}>
+                          <label>
+                            拡大
+                            <select
+                              disabled={isEditingLocked}
+                              value={clip.zoom ?? 1}
+                              onChange={(event) => updateClip(clip.id, { zoom: Number(event.target.value) })}
+                            >
+                              <option value="1">なし</option>
+                              <option value="1.2">1.2倍</option>
+                              <option value="1.5">1.5倍</option>
+                              <option value="2">2倍</option>
+                            </select>
+                          </label>
+                          <label>
+                            再生速度
+                            <select
+                              disabled={isEditingLocked}
+                              value={getClipPlaybackRate(clip)}
+                              onChange={(event) => updateClip(clip.id, { playbackRate: Number(event.target.value) })}
+                            >
+                              <option value="1">標準</option>
+                              <option value="0.75">0.75倍</option>
+                              <option value="0.5">0.5倍</option>
+                            </select>
+                          </label>
+                          <label className="spotlight-toggle">
+                            <input
+                              checked={clip.spotlight ?? false}
+                              disabled={isEditingLocked}
+                              type="checkbox"
+                              onChange={(event) => updateClip(clip.id, { spotlight: event.target.checked })}
+                            />
+                            スポットで強調
+                          </label>
+                          <div className="focus-picker" aria-label="拡大とスポットの注視位置">
+                            <span>注視位置</span>
+                            <div>
+                              {clipFocusPoints.map((point) => {
+                                const focus = getClipFocus(clip)
+                                const isSelected = focus.x === point.x && focus.y === point.y
+                                return (
+                                  <button
+                                    aria-label={point.label}
+                                    className={isSelected ? 'selected-focus' : ''}
+                                    disabled={isEditingLocked}
+                                    key={point.label}
+                                    title={point.label}
+                                    type="button"
+                                    onClick={() => updateClip(clip.id, { focusX: point.x, focusY: point.y })}
+                                  />
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <label className="caption-input">
+                            テロップ
+                            <input
+                              disabled={isEditingLocked}
+                              maxLength={60}
+                              placeholder="例: ボルトの締付状態を確認"
+                              value={clip.caption ?? ''}
+                              onChange={(event) => updateClip(clip.id, { caption: event.target.value })}
+                            />
+                          </label>
+                          <label>
+                            テロップ位置
+                            <select
+                              disabled={isEditingLocked}
+                              value={clip.captionPosition ?? 'bottom'}
+                              onChange={(event) =>
+                                updateClip(clip.id, {
+                                  captionPosition: event.target.value as 'top' | 'center' | 'bottom',
+                                })
+                              }
+                            >
+                              <option value="top">上</option>
+                              <option value="center">中央</option>
+                              <option value="bottom">下</option>
+                            </select>
+                          </label>
+                        </section>
+                        <div className="clip-actions">
+                          <button
+                            aria-label="動画を上へ移動"
+                            disabled={isEditingLocked || index === 0}
+                            type="button"
+                            onClick={() => moveClip(index, -1)}
+                          >
+                            <ArrowUp size={17} aria-hidden="true" />
+                          </button>
+                          <button
+                            aria-label="動画を下へ移動"
+                            disabled={isEditingLocked || index === videoClips.length - 1}
+                            type="button"
+                            onClick={() => moveClip(index, 1)}
+                          >
+                            <ArrowDown size={17} aria-hidden="true" />
+                          </button>
+                          <button
+                            aria-label="動画を構成から外す"
+                            disabled={isEditingLocked}
+                            type="button"
+                            onClick={() => removeClip(clip.id)}
+                          >
+                            <Trash2 size={17} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+              </details>
+            </section>
+
+            <section className={`chapter-panel ${isEditingLocked ? 'locked-panel' : ''}`}>
+              <fieldset className="editor-fieldset" disabled={isEditingLocked}>
+              <div className="section-heading">
+                <h2>チャプター手順</h2>
+                <button disabled={isEditingLocked} type="button" onClick={addStep}>
+                  <Plus size={17} aria-hidden="true" />
+                  現在位置に手順追加
+                </button>
+              </div>
+              <div className="steps">
+                {selectedManual.steps.map((step, index) => (
+                  <article
+                    className={`step-card ${activeStep?.id === step.id ? 'active-step' : ''}`}
+                    key={step.id}
+                    onClick={() => seekToStep(step)}
+                  >
+                    <strong>{String(index + 1).padStart(2, '0')}</strong>
+                    <button
+                      aria-label={`手順 ${index + 1} を削除`}
+                      className="step-delete"
+                      disabled={isEditingLocked || selectedManual.steps.length <= 1}
+                      title="手順を削除"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        removeStep(step.id)
+                      }}
+                    >
+                      <Trash2 size={17} aria-hidden="true" />
+                    </button>
+                    <label>
+                      時間
+                      <input
+                        value={step.time}
+                        onChange={(event) => {
+                          const steps = selectedManual.steps.map((item) =>
+                            item.id === step.id ? { ...item, time: event.target.value } : item,
+                          )
+                          updateManual({ steps })
+                        }}
+                      />
+                    </label>
+                    <label>
+                      手順名
+                      <input
+                        value={step.title}
+                        onChange={(event) => {
+                          const steps = selectedManual.steps.map((item) =>
+                            item.id === step.id ? { ...item, title: event.target.value } : item,
+                          )
+                          updateManual({ steps })
+                        }}
+                      />
+                    </label>
+                    <label className="wide-field">
+                      説明
+                      <textarea
+                        value={step.detail}
+                        onChange={(event) => {
+                          const steps = selectedManual.steps.map((item) =>
+                            item.id === step.id ? { ...item, detail: event.target.value } : item,
+                          )
+                          updateManual({ steps })
+                        }}
+                      />
+                    </label>
+                    <div className="step-flow-action" onClick={(event) => event.stopPropagation()}>
+                      <button type="button" disabled={isEditingLocked} onClick={() => openVideoWorkflow({ target: { kind: 'step', id: step.id } })}><Scissors size={17} />動画を追加</button>
+                      <button
+                        className={decisionNodes.some((node) => node.sourceStepId === step.id) ? 'linked' : ''}
+                        disabled={isEditingLocked}
+                        type="button"
+                        onClick={() => addStepToDecisionFlow(step)}
+                      >
+                        <GitBranch size={17} aria-hidden="true" />
+                        {decisionNodes.some((node) => node.sourceStepId === step.id)
+                          ? 'フローを更新'
+                          : 'フローへ追加'}
+                      </button>
+                    </div>
+                    <div className="step-video-attachments wide-field" onClick={event => event.stopPropagation()}>
+                      {(step.videos ?? []).map(media => <section className="step-video-attachment" key={media.id}>
+                        <header><span>{media.name}</span><button type="button" title="動画を編集" aria-label={`${media.name}を編集`} onClick={() => openVideoWorkflow({ target: { kind: 'step', id: step.id }, media })}><Scissors size={17} /></button><button type="button" title="動画を手順から削除" aria-label={`${media.name}を手順から削除`} onClick={() => { if (window.confirm('この動画を手順から削除しますか？元動画は残ります。')) updateManual({ steps: selectedManual.steps.map(item => item.id === step.id ? { ...item, videos: item.videos?.filter(video => video.id !== media.id) } : item), decisionNodes: decisionNodes.map(node => node.sourceStepId === step.id ? { ...node, media: node.media?.filter(item => item.id !== media.id) } : node) }) }}><Trash2 size={17} /></button></header>
+                        <StepVideoPlayer media={media} />
+                      </section>)}
+                    </div>
+                    <section
+                      className="inspection-panel step-inspection-panel"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="section-heading compact-heading">
+                        <h2>この手順の検査画像</h2>
+                      </div>
+                      <div className="inspection-upload-grid">
+                        {(['ok', 'ng', 'criteria'] as InspectionImageKind[]).map((kind) => (
+                          <label className={`inspection-upload ${kind}`} key={kind}>
+                            <UploadCloud size={18} aria-hidden="true" />
+                            {imageKindLabels[kind]}を追加
+                            <input
+                              accept="image/*"
+                              onChange={handleInspectionImageUpload(kind, step.id)}
+                              type="file"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <div className="inspection-gallery">
+                        {(step.inspectionImages ?? []).map((image) => (
+                          <article className={`inspection-image ${image.kind}`} key={image.id}>
+                            <img src={image.url} alt={image.name} />
+                            <span>{imageKindLabels[image.kind]}</span>
+                            <strong>{image.name}</strong>
+                            <button
+                              aria-label={`${image.name}を削除`}
+                              className="inspection-image-delete"
+                              disabled={isEditingLocked}
+                              title="検査画像を削除"
+                              type="button"
+                              onClick={() => void removeInspectionImage(step.id, image.id)}
+                            >
+                              <Trash2 size={15} aria-hidden="true" />
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  </article>
+                ))}
+              </div>
+              </fieldset>
+            </section>
+            </div>
           </div>
         )}
 
