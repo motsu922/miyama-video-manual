@@ -9,7 +9,7 @@
 .video-workflow button:disabled { opacity:.5; cursor:not-allowed; }
 .video-workflow button:focus-visible, .video-workflow input:focus-visible, .video-workflow select:focus-visible, .video-workflow textarea:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
 .video-workflow .vw-primary { background:#2364d8; color:white; border-color:#2364d8; }
-.vw-stages { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); list-style:none; padding:12px 22px; margin:0; gap:10px; background:#f6f8fa; flex-shrink:0; }
+.vw-stages { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); list-style:none; padding:12px 22px; margin:0; gap:10px; background:#f6f8fa; flex-shrink:0; }
 .vw-stages li { display:flex; align-items:center; gap:8px; font-size:13px; color:#667080; }
 .vw-stages li>span { width:26px; height:26px; flex:0 0 26px; display:grid; place-items:center; border:1px solid #ccd4dd; border-radius:50%; }
 .vw-stages .active { color:#174aaf; }

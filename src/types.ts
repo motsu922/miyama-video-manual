@@ -77,6 +77,15 @@ export type ManualImage = {
   uploadedAt: string
 }
 
+export type VideoSource = {
+  id: string
+  name: string
+  url: string
+  uploadedAt: string
+  duration?: number
+  thumbnail?: string
+}
+
 export type ManualLanguage = 'ja' | 'th' | 'pt'
 
 export type ManualKind = 'standard' | 'abnormal'
@@ -161,6 +170,7 @@ export type Manual = {
   updatedAt: string
   videoUrl: string
   videoClips?: VideoClip[]
+  videoSources?: VideoSource[]
   manualImages?: ManualImage[]
   thumbnail: string
   tags: string[]

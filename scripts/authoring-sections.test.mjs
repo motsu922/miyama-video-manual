@@ -73,6 +73,7 @@ try {
   assert.equal(await steps.getByLabel('手順名', { exact: true }).inputValue(), '製品番号を照合')
   assert.equal(await page.locator('.form-panel').getByLabel('作業名', { exact: true }).inputValue(), '基本情報の変更を保持')
 
+  await steps.getByText('登録済みの全体動画', { exact: true }).click()
   const video = steps.locator('.video-frame video')
   await video.evaluate(async element => {
     if (!element.readyState) await new Promise(resolve => element.addEventListener('loadedmetadata', resolve, { once: true }))
