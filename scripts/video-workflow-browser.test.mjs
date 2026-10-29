@@ -11,7 +11,8 @@ const out = 'node_modules/.tmp/video-workflow'
 await fs.mkdir(out, { recursive: true })
 const errors = []
 page.on('pageerror', error => errors.push(error.message))
-page.on('dialog', dialog => dialog.accept())
+let acceptConfirmation = true
+page.on('dialog', dialog => acceptConfirmation ? dialog.accept() : dialog.dismiss())
 try {
   // Encode synthetic JPEG frames; no real manuals or footage are used or uploaded.
   await page.setContent('<body style="margin:0;background:#eff5f6;font:48px Arial"><div style="padding:50px;background:#0d807e;color:white">TEST VIDEO</div><div style="margin:50px;width:200px;height:200px;background:#ffb647"></div></body>')
@@ -37,7 +38,7 @@ export const subscribeManuals = cb => { cb(window.testManuals); return () => {};
 export const subscribeFlashTestResults = (id, cb) => { cb([]); return () => {}; };
 export const ensureSignedIn = async () => {};
 export const saveManual = async manual => { if(window.failNextSave){window.failNextSave=false;throw Error('Test offline');} window.testSaves.push(manual);window.testManuals=[manual]; };
-export const uploadManualVideo = async (id, file, progress) => {window.testUploads++; progress?.(100); return ${JSON.stringify(url)};};
+export const uploadManualVideo = async (id, file, progress) => {window.testUploads++;if(window.failNextUpload){window.failNextUpload=false;throw Error('Test upload offline');} progress?.(100); return ${JSON.stringify(url)};};
 const prohibited = async () => { throw Error('Unexpected write'); };
 export const uploadManualImage=prohibited,uploadInspectionImage=prohibited,deleteManual=prohibited,recordManualView=prohibited,recordFlashTestResult=prohibited;
 ` }))
@@ -115,6 +116,57 @@ export const uploadManualImage=prohibited,uploadInspectionImage=prohibited,delet
   await dialog.waitFor({ state: 'hidden' })
   assert.equal(await page.evaluate(() => window.testUploads), 1)
   assert.equal(await page.evaluate(() => window.testSaves.length), 2)
+  // The main-video upload is visible without opening advanced settings, including on mobile.
+  const upload = page.getByRole('button', { name: '動画をアップロード', exact: true })
+  const uploadFile = page.getByLabel('全体動画ファイル', { exact: true })
+  assert.equal(await page.locator('.video-advanced').getAttribute('open'), null)
+  assert.ok(await upload.isVisible())
+  await uploadFile.setInputFiles({ name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('test') })
+  assert.equal(await page.evaluate(() => window.testUploads), 1)
+  const chooser = page.waitForEvent('filechooser')
+  await upload.focus()
+  await upload.press('Enter')
+  await (await chooser).setFiles({ name: 'main.webm', mimeType: 'video/webm', buffer: bytes })
+  await page.waitForFunction(() => window.testSaves.length === 3)
+  await page.waitForFunction(() => document.querySelector('.video-frame video')?.readyState >= 2)
+  saved = await page.evaluate(() => window.testSaves.at(-1))
+  assert.equal(saved.videoClips[0].name, 'main.webm')
+  assert.ok(saved.videoClips[0].duration > 0)
+  assert.ok(saved.thumbnail.startsWith('data:image/jpeg'))
+  assert.equal(saved.steps[1].videos[0].videoEdit.trimEnd, 4)
+  assert.equal(saved.decisionNodes.length, 2)
+  assert.equal(await uploadFile.inputValue(), '')
+  for (const width of [1440, 1024, 390]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await upload.scrollIntoViewIfNeeded()
+    const panel = await page.locator('.video-panel').boundingBox()
+    for (const button of [upload, page.getByRole('button', { name: '動画を編集して手順に追加', exact: true })]) {
+      assert.ok(await button.isVisible())
+      const box = await button.boundingBox()
+      assert.ok(box.x >= panel.x && box.x + box.width <= panel.x + panel.width)
+    }
+    assert.equal(await page.locator('.video-advanced').getAttribute('open'), null)
+    await page.locator('.video-panel').screenshot({ path: `${out}/upload-${width}.png` })
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  acceptConfirmation = false
+  await uploadFile.setInputFiles({ name: 'cancel-replace.webm', mimeType: 'video/webm', buffer: bytes })
+  assert.equal(await page.evaluate(() => window.testUploads), 2)
+  assert.equal(await page.evaluate(() => window.testSaves.length), 3)
+  acceptConfirmation = true
+  await page.evaluate(() => { window.failNextUpload = true })
+  await uploadFile.setInputFiles({ name: 'replace.webm', mimeType: 'video/webm', buffer: bytes })
+  await page.getByText('動画アップロード失敗: Test upload offline', { exact: true }).waitFor()
+  assert.ok(await upload.isEnabled())
+  assert.equal(await page.evaluate(() => window.testSaves.length), 3)
+  // Selecting the same file again can retry after failure.
+  await uploadFile.setInputFiles({ name: 'replace.webm', mimeType: 'video/webm', buffer: bytes })
+  await page.waitForFunction(() => window.testSaves.length === 4)
+  saved = await page.evaluate(() => window.testSaves.at(-1))
+  assert.equal(saved.videoClips.length, 1)
+  assert.equal(saved.videoClips[0].name, 'replace.webm')
+  assert.equal(saved.steps[1].videos[0].videoEdit.trimEnd, 4)
+  assert.equal(saved.decisionNodes[1].media[0].videoEdit.trimEnd, 4)
   // Help is accessible through the app and contains the exact operational sequence.
   await page.getByRole('button', { name: '運用マニュアル', exact: true }).first().click()
   await page.getByRole('link', { name: '動画の編集・手順への挿入', exact: true }).click()
@@ -122,6 +174,11 @@ export const uploadManualImage=prohibited,uploadInspectionImage=prohibited,delet
   assert.ok((await page.locator('#guide-video-howto').innerText()).includes('10〜18秒'))
   await page.screenshot({ path: `${out}/guide.png` })
   fixtureManual = { ...saved, status: 'published', decisionStartNodeId: saved.decisionNodes[1].id }
+  await page.goto(base)
+  await page.locator('.manual-list').getByRole('button', { name: '編集', exact: true }).click()
+  await page.getByRole('tab', { name: '手順作成', exact: true }).click()
+  assert.equal(await upload.isEnabled(), false)
+  assert.equal(await uploadFile.isEnabled(), false)
   await page.goto(`${base}?manual=${manual.id}`)
   await page.locator('.manual-document-table .step-video-player').waitFor()
   await page.waitForFunction(() => document.querySelector('.manual-document-table video')?.readyState >= 2)
@@ -144,7 +201,7 @@ export const uploadManualImage=prohibited,uploadInspectionImage=prohibited,delet
     await player.getByRole('button', { name: '動画を一時停止', exact: true }).click()
   }
   assert.deepEqual(errors, [])
-  console.log('Video workflow passed: real WebM preview, trim bounds, effects, responsive layout, retry, reedit, cancellation, guide. No production writes.')
+  console.log('Video workflow passed: real WebM preview, trim bounds, effects, direct upload, keyboard file picker, replacement cancellation, upload retry, published lock, responsive layout, reedit, guide. No production writes.')
 } catch (error) {
   await page.screenshot({ path: `${out}/failure.png` })
   console.error(errors, await page.locator('dialog').innerText().catch(() => 'No dialog'))

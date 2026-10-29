@@ -713,6 +713,7 @@ function App() {
   const [hasOpenedQrManual, setHasOpenedQrManual] = useState(false)
   const [dirtyManualIds, setDirtyManualIds] = useState<Set<string>>(new Set())
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const videoUploadInputRef = useRef<HTMLInputElement | null>(null)
   const viewerVideoRef = useRef<HTMLVideoElement | null>(null)
   const viewerStepsRef = useRef<HTMLDivElement | null>(null)
   const viewerLanguageHeaderRef = useRef<HTMLElement | null>(null)
@@ -2223,12 +2224,14 @@ function App() {
   const handleVideoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file) return
+    if (!file || isUploading || isEditingLocked) return
 
     if (!file.type.startsWith('video/')) {
       setFirebaseMessage('動画ファイルを選択してください')
       return
     }
+
+    if ((selectedManual.videoUrl || selectedManual.videoClips?.length) && !window.confirm('全体動画を選択した動画に置き換えますか？\n現在の動画構成・切り取り・編集設定は置き換わります。チャプター手順やカードに挿入済みの動画は残ります。')) return
 
     setIsUploading(true)
     setFirebaseMessage(`動画アップロード中: ${file.name}`)
@@ -2259,6 +2262,7 @@ function App() {
         current.map((manual) => (manual.id === selectedManual.id ? updatedManual : manual)),
       )
       await saveManual(updatedManual)
+      markManualSaved(updatedManual.id)
       setFirebaseMessage(`動画アップロード完了: ${file.name}`)
     } catch (error) {
       setFirebaseMessage(
@@ -4888,21 +4892,24 @@ function App() {
                 <span>{selectedManual.duration}</span>
               </div>
               <div className="upload-row">
+                <button type="button" disabled={isUploading || isEditingLocked} onClick={() => videoUploadInputRef.current?.click()}>
+                  <UploadCloud size={18} aria-hidden="true" />
+                  {isUploading ? 'アップロード中' : '動画をアップロード'}
+                </button>
                 <button type="button" className="save-button" disabled={isEditingLocked || isUploading} onClick={() => openVideoWorkflow()}><Scissors size={18} />動画を編集して手順に追加</button>
               </div>
+              <input
+                ref={videoUploadInputRef}
+                aria-label="全体動画ファイル"
+                accept="video/*"
+                disabled={isUploading || isEditingLocked}
+                onChange={handleVideoUpload}
+                type="file"
+                hidden
+              />
               <details className="video-advanced">
               <summary>動画全体のアップロード・連結</summary>
               <div className="upload-row">
-                <label className="upload-control">
-                  <UploadCloud size={18} aria-hidden="true" />
-                  {isUploading ? 'アップロード中' : '動画アップロード'}
-                  <input
-                    accept="video/*"
-                    disabled={isUploading || isEditingLocked}
-                    onChange={handleVideoUpload}
-                    type="file"
-                  />
-                </label>
                 <label className="upload-control secondary-upload">
                   <Plus size={18} aria-hidden="true" />
                   動画を追加
